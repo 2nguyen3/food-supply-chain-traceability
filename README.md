@@ -10,11 +10,11 @@ Food Supply Chain Traceability là hệ thống theo dõi và truy xuất
 nguồn gốc thực phẩm xuyên suốt quá trình từ nông trại, vận chuyển
 đến nhà bán lẻ.
 
-Dự án sử dụng lô xoài làm đối tượng quản lý. Mỗi lô được đại diện
-bởi một NFT ERC-721, gắn với hồ sơ sản phẩm lưu trên IPFS.
-Các hoạt động tạo lô, bàn giao, vận chuyển và thu hồi được ghi nhận
-trên blockchain để các bên có thể kiểm tra lịch sử và đối chiếu
-giao dịch.
+Dự án sử dụng **lô dừa nguyên trái** làm đối tượng quản lý. Mỗi lô cố định
+**1 tấn (1.000 kg)** và được đại diện bởi **một NFT ERC-721**, gắn với
+hồ sơ sản phẩm lưu trên IPFS. Các hoạt động tạo lô, bàn giao, vận chuyển
+và thu hồi được ghi nhận trên blockchain để các bên có thể kiểm tra lịch
+sử và đối chiếu giao dịch.
 
 Người tiêu dùng truy cập trang tra cứu công khai bằng mã lô hoặc
 QR để xem nguồn gốc, hành trình và cảnh báo liên quan mà không
@@ -94,7 +94,7 @@ theo ví, vai trò và quyền trên từng tài liệu.
 
 ## Phạm vi dự án
 
-- Quản lý nguyên lô xoài, mỗi lô tương ứng một NFT.
+- Quản lý nguyên lô dừa nguyên trái, mỗi lô 1.000 kg tương ứng một NFT.
 - Mô phỏng chuỗi Farmer → Logistics → Retailer.
 - Sử dụng dữ liệu và chứng nhận mẫu phục vụ học tập.
 - Giả lập cảm biến; chưa tích hợp thiết bị IoT thực tế.
