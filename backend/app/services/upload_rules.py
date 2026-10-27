@@ -9,6 +9,7 @@ import json
 from typing import BinaryIO
 
 from app.services.chain import ChainClient
+from app.services.metadata import MetadataInvalid, check_metadata
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 
@@ -75,7 +76,13 @@ def validate_content(doc_type: str, content: bytes) -> str:
         if content.startswith(PNG_MAGIC):
             return "image/png"
         raise UnsupportedContent("Cần ảnh JPEG hoặc PNG")
-    try:  # metadata, incident_report
+    if doc_type == "metadata":
+        try:
+            check_metadata(content)
+        except MetadataInvalid as exc:
+            raise UnsupportedContent(str(exc)) from None
+        return "application/json"
+    try:  # incident_report
         json.loads(content.decode("utf-8"))
     except (UnicodeDecodeError, ValueError):
         raise UnsupportedContent("Cần JSON hợp lệ mã hóa UTF-8") from None
