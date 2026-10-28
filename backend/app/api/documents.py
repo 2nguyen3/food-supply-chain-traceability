@@ -58,6 +58,30 @@ def bind_document(
     )
 
 
+@router.get("/{document_id}/content")
+def read_document_content(
+    document_id: uuid.UUID,
+    wallet: str = Depends(current_wallet),
+    db: Session = Depends(get_session),
+    chain: ChainClient = Depends(get_chain),
+    ipfs: PinataClient = Depends(get_ipfs),
+    settings: Settings = Depends(get_settings),
+):
+    doc, plaintext = document_service.read_private_document(
+        db, chain, ipfs, settings.master_key, wallet, document_id
+    )
+    ext = document_service.EXTENSION.get(doc.mime_type, "bin")
+    return Response(
+        content=plaintext,
+        media_type=doc.mime_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{doc.doc_type}-{str(doc.id)[:8]}.{ext}"',
+            "X-Document-Sha256": bytes(doc.sha256).hex(),
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @router.post("/{document_id}/grants", response_model=GrantOut)
 def grant_access(
     document_id: uuid.UUID,

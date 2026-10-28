@@ -22,11 +22,13 @@ def _domain_errors() -> dict:
     from app.core.crypto import CiphertextInvalid, CryptoConfigError
     from app.services import auth_service as a, document_service as d, upload_rules as u
     from app.services.chain import ChainUnavailable
-    from app.services.ipfs import IpfsUploadError
+    from app.services.ipfs import IpfsFetchError, IpfsUploadError
 
     return {
         ChainUnavailable: (503, "CHAIN_UNAVAILABLE", "Không đọc được dữ liệu từ blockchain"),
         IpfsUploadError: (502, "IPFS_UPLOAD_FAILED", "Upload IPFS thất bại, hãy thử lại"),
+        IpfsFetchError: (502, "IPFS_FETCH_FAILED", "Không tải được tài liệu từ IPFS"),
+        d.AccessDenied: (403, "ACCESS_DENIED", "Bạn không có quyền đọc tài liệu này"),
         CiphertextInvalid: (502, "CIPHERTEXT_INVALID", "Dữ liệu mã hóa bị hỏng hoặc đã bị sửa"),
         CryptoConfigError: (500, "SERVER_MISCONFIGURED", "Máy chủ chưa cấu hình khóa mã hóa"),
         u.FileTooLarge: (413, "FILE_TOO_LARGE", "Tệp vượt giới hạn 10 MB"),

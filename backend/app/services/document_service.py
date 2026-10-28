@@ -58,6 +58,10 @@ class InvalidRequest(Exception):
     pass
 
 
+class AccessDenied(Exception):
+    pass
+
+
 # ---------- upload ----------
 def create_document(
     db: Session, ipfs: PinataClient, master_key: str | None, wallet: str, doc_type: str, content: bytes,
@@ -224,3 +228,36 @@ def revoke_grant(db: Session, wallet: str, doc_id: uuid.UUID, target: str) -> No
         raise GrantNotFound()
     grant.revoked_at = datetime.now(timezone.utc)
     db.commit()
+
+
+# ---------- đọc tài liệu riêng ----------
+def read_private_document(
+    db: Session, chain: ChainClient, ipfs: PinataClient, master_key: str | None, wallet: str, doc_id: uuid.UUID
+) -> tuple[Document, bytes]:
+    """Trả (tài liệu, bản rõ) nếu ví được phép đọc; mọi điều kiện kiểm lại mỗi lần gọi.
+
+    Điều kiện: là uploader hoặc có grant chưa thu hồi, VÀ đang giữ vai trò nghiệp vụ trên contract.
+    Admin không mặc nhiên đọc được. RPC lỗi thì ChainUnavailable (từ chối, không đoán quyền).
+    """
+    doc = db.get(Document, doc_id)
+    if doc is None:
+        raise DocumentNotFound()
+    if doc.visibility != "private":
+        raise DocumentIsPublic(f"Tài liệu công khai, đọc trực tiếp từ IPFS (cid={doc.cid})")
+
+    wallet = wallet.lower()
+    allowed = doc.uploader.lower() == wallet
+    if not allowed:
+        grant = db.get(DocumentGrant, (doc.id, wallet))
+        allowed = grant is not None and grant.revoked_at is None
+    if not allowed or not chain.has_business_role(wallet):
+        raise AccessDenied()
+
+    package = ipfs.fetch(doc.cid)
+    plaintext = crypto.decrypt_document(
+        package, bytes(doc.aad), bytes(doc.wrapped_key), bytes(doc.wrap_iv), bytes(doc.wrap_tag),
+        crypto.parse_master_key(master_key),
+    )
+    if upload_rules.sha256_of(plaintext) != bytes(doc.sha256):  # bản rõ phải khớp hash lúc upload
+        raise crypto.CiphertextInvalid("Nội dung giải mã không khớp hash đã lưu")
+    return doc, plaintext

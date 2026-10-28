@@ -4,16 +4,24 @@ Lỗi mạng hoặc Pinata từ chối thì ném IpfsUploadError; tầng gọi t
 và không tạo bản ghi. Không ghi JWT ra log hay thông báo lỗi.
 """
 import functools
+import re
 
 import httpx
 
 from app.core.config import get_settings
 
 UPLOAD_URL = "https://uploads.pinata.cloud/v3/files"
+GATEWAYS = ("https://gateway.pinata.cloud/ipfs/", "https://ipfs.io/ipfs/")  # thử lần lượt
+MAX_FETCH_BYTES = 11 * 1024 * 1024  # 10 MB nội dung + phần đầu gói mã hóa
+CID_PATTERN = re.compile(r"^[A-Za-z0-9]{10,200}$")
 
 
 class IpfsUploadError(Exception):
     """Upload lên IPFS thất bại; có thể thử lại."""
+
+
+class IpfsFetchError(Exception):
+    """Không tải được nội dung từ IPFS (gateway lỗi, hết thời gian, quá lớn)."""
 
 
 class PinataClient:
@@ -41,6 +49,27 @@ class PinataClient:
         if not cid:
             raise IpfsUploadError("Pinata không trả CID")
         return cid
+
+
+    def fetch(self, cid: str, timeout: float = 20.0, gateways: tuple[str, ...] = GATEWAYS) -> bytes:
+        """Tải nội dung theo CID qua gateway công khai; thử lần lượt, quá giới hạn kích thước thì bỏ."""
+        if not CID_PATTERN.match(cid):
+            raise IpfsFetchError("CID không hợp lệ")
+        for gateway in gateways:
+            try:
+                with httpx.stream("GET", gateway + cid, timeout=timeout, follow_redirects=True) as resp:
+                    resp.raise_for_status()
+                    data = b""
+                    for chunk in resp.iter_bytes():
+                        data += chunk
+                        if len(data) > MAX_FETCH_BYTES:
+                            raise IpfsFetchError("Nội dung IPFS vượt giới hạn")
+                    return data
+            except IpfsFetchError:
+                raise
+            except httpx.HTTPError:
+                continue
+        raise IpfsFetchError("Không tải được từ các gateway IPFS")
 
 
 @functools.lru_cache
