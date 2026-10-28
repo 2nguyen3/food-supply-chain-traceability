@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.api import auth
+from app.api import auth, documents
 from app.core.errors import register_error_handlers
 
 app = FastAPI(
@@ -10,6 +10,7 @@ app = FastAPI(
 
 register_error_handlers(app)
 app.include_router(auth.router)
+app.include_router(documents.router)
 
 
 @app.get("/health")

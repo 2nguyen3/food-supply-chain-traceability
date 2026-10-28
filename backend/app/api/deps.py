@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from app.core.errors import ApiError
 from app.db.session import get_session
 from app.services import session_service
+from app.services.chain import ChainClient, get_chain_client
+from app.services.ipfs import PinataClient, get_pinata_client
 
 
 def bearer_token(request: Request) -> str:
@@ -21,3 +23,11 @@ def current_wallet(token: str = Depends(bearer_token), db: Session = Depends(get
     if wallet is None:
         raise ApiError(401, "UNAUTHENTICATED", "Thiếu hoặc sai access token")
     return wallet
+
+
+def get_chain() -> ChainClient:
+    return get_chain_client()
+
+
+def get_ipfs() -> PinataClient:
+    return get_pinata_client()

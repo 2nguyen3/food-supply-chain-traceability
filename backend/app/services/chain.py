@@ -8,7 +8,8 @@ from pathlib import Path
 
 from requests.exceptions import RequestException
 from web3 import Web3
-from web3.exceptions import BadFunctionCallOutput, ContractLogicError, Web3Exception
+from web3.logs import DISCARD
+from web3.exceptions import BadFunctionCallOutput, ContractLogicError, TransactionNotFound, Web3Exception
 
 from app.core.config import get_settings
 
@@ -21,6 +22,14 @@ LIFECYCLES = ("Created", "InTransit", "Delivered", "Sold")
 
 class ChainUnavailable(Exception):
     """Không đọc được dữ liệu từ chain (RPC lỗi, sai mạng, sai địa chỉ contract)."""
+
+
+class ReceiptNotFound(Exception):
+    """Chưa có receipt cho giao dịch (còn pending hoặc không tồn tại)."""
+
+
+class ReceiptInvalid(Exception):
+    """Receipt thất bại, sai contract hoặc không có event BatchCreated hợp lệ."""
 
 
 def role_id(role: str) -> bytes:
@@ -73,6 +82,47 @@ class ChainClient:
             return self._call(self._contract.functions.ownerOf(token_id))
         except ContractLogicError:
             return None
+
+    def get_batch_created(self, tx_hash: str) -> dict:
+        """Đọc receipt của giao dịch createBatch: trả farmer, tokenId, metadataCID, metadataHash.
+
+        ReceiptNotFound nếu chưa có receipt; ReceiptInvalid nếu status != 1, không gửi tới contract
+        hoặc không có event BatchCreated do contract này phát.
+        """
+        try:
+            receipt = self._w3.eth.get_transaction_receipt(tx_hash)
+        except TransactionNotFound:
+            raise ReceiptNotFound() from None
+        except (RequestException, Web3Exception, OSError) as exc:
+            raise ChainUnavailable(str(exc)) from exc
+        if receipt["status"] != 1:
+            raise ReceiptInvalid("Giao dịch thất bại (status != 1)")
+        if receipt["to"] is None or receipt["to"].lower() != self._contract.address.lower():
+            raise ReceiptInvalid("Giao dịch không gửi tới contract này")
+        try:
+            events = self._contract.events.BatchCreated().process_receipt(receipt, errors=DISCARD)
+        except Web3Exception as exc:
+            raise ReceiptInvalid("Không đọc được event BatchCreated") from exc
+        events = [e for e in events if e["address"].lower() == self._contract.address.lower()]
+        if len(events) != 1:
+            raise ReceiptInvalid("Receipt không có đúng một event BatchCreated")
+        a = events[0]["args"]
+        return {
+            "token_id": int(a["tokenId"]),
+            "farmer": a["farmer"].lower(),
+            "metadata_cid": a["metadataCID"],
+            "metadata_hash": bytes(a["metadataHash"]),
+        }
+
+    def get_batch_creator(self, token_id: int, from_block: int = 0) -> str | None:
+        """Farmer đã tạo lô (từ event BatchCreated); None nếu không có lô."""
+        try:
+            logs = self._contract.events.BatchCreated().get_logs(
+                from_block=from_block, argument_filters={"tokenId": token_id}
+            )
+        except (RequestException, Web3Exception, OSError) as exc:
+            raise ChainUnavailable(str(exc)) from exc
+        return logs[0]["args"]["farmer"].lower() if logs else None
 
     def get_batch(self, token_id: int) -> dict | None:
         """Dữ liệu lô trên chain; None nếu không tồn tại."""
