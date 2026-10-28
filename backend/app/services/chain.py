@@ -141,4 +141,6 @@ def get_chain_client() -> ChainClient:
     s = get_settings()
     if not s.rpc_url or not s.contract_address:
         raise ChainUnavailable("Thiếu RPC_URL hoặc CONTRACT_ADDRESS")
-    return ChainClient(s.rpc_url, s.contract_address, s.chain_id)
+    client = ChainClient(s.rpc_url, s.contract_address, s.chain_id)
+    client.check_chain()  # sai chainId hoặc địa chỉ không có bytecode thì từ chối, không cache
+    return client

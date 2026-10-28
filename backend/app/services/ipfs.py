@@ -25,8 +25,10 @@ class IpfsFetchError(Exception):
 
 
 class PinataClient:
-    def __init__(self, jwt: str, timeout: float = 30.0, upload_url: str = UPLOAD_URL):
+    def __init__(self, jwt: str, timeout: float = 30.0, upload_url: str = UPLOAD_URL,
+                 gateways: tuple[str, ...] = GATEWAYS):
         self._jwt = jwt
+        self._gateways = gateways
         self._timeout = timeout
         self._upload_url = upload_url
 
@@ -51,11 +53,11 @@ class PinataClient:
         return cid
 
 
-    def fetch(self, cid: str, timeout: float = 20.0, gateways: tuple[str, ...] = GATEWAYS) -> bytes:
+    def fetch(self, cid: str, timeout: float = 20.0, gateways: tuple[str, ...] | None = None) -> bytes:
         """Tải nội dung theo CID qua gateway công khai; thử lần lượt, quá giới hạn kích thước thì bỏ."""
         if not CID_PATTERN.match(cid):
             raise IpfsFetchError("CID không hợp lệ")
-        for gateway in gateways:
+        for gateway in gateways or self._gateways:
             try:
                 with httpx.stream("GET", gateway + cid, timeout=timeout, follow_redirects=True) as resp:
                     resp.raise_for_status()
@@ -77,4 +79,7 @@ def get_pinata_client() -> PinataClient:
     jwt = get_settings().pinata_jwt
     if not jwt:
         raise IpfsUploadError("Thiếu PINATA_JWT")
-    return PinataClient(jwt)
+    gateway = get_settings().ipfs_gateway
+    # Gateway riêng (nếu có) đứng đầu; gateway công cộng của Pinata hay bị giới hạn tốc độ (HTTP 429)
+    gateways = ((gateway.rstrip("/") + "/ipfs/",) if gateway else ()) + GATEWAYS
+    return PinataClient(jwt, gateways=gateways)

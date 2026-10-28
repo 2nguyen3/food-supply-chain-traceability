@@ -67,7 +67,14 @@ def register_error_handlers(app: FastAPI) -> None:
     async def _validation(_: Request, exc: RequestValidationError):
         return JSONResponse(status_code=422, content=_body("INVALID_REQUEST", "Dữ liệu gửi lên không hợp lệ"))
 
+    http_codes = {401: "UNAUTHENTICATED", 403: "FORBIDDEN", 404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED"}
+
     @app.exception_handler(StarletteHTTPException)
     async def _http(_: Request, exc: StarletteHTTPException):
-        code = "NOT_FOUND" if exc.status_code == 404 else "HTTP_ERROR"
+        code = http_codes.get(exc.status_code, "HTTP_ERROR")
         return JSONResponse(status_code=exc.status_code, content=_body(code, str(exc.detail)))
+
+    @app.exception_handler(Exception)
+    async def _unexpected(_: Request, exc: Exception):
+        # Không lộ chi tiết nội bộ (đường dẫn, câu SQL, khóa) ra client
+        return JSONResponse(status_code=500, content=_body("INTERNAL_ERROR", "Lỗi máy chủ"))

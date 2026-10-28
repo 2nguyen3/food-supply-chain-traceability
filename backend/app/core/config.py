@@ -20,7 +20,15 @@ class Settings(BaseModel):
     master_key: str | None = Field(default=None, repr=False)
     allowed_origin: str | None = None
     auth_domain: str | None = None
+    ipfs_gateway: str | None = None
     token_ttl_minutes: int = 20
+
+
+def allowed_origins() -> list[str]:
+    """ALLOWED_ORIGIN (có thể nhiều origin, ngăn cách bằng dấu phẩy). Trống thì không mở CORS cho ai."""
+    load_dotenv(REPO_DIR / ".env", override=False)
+    raw = os.environ.get("ALLOWED_ORIGIN", "")
+    return [o.strip().rstrip("/") for o in raw.split(",") if o.strip() and o.strip() != "*"]
 
 
 @functools.lru_cache
@@ -55,6 +63,7 @@ def get_settings() -> Settings:
         "master_key": _get_str("MASTER_KEY"),
         "allowed_origin": _get_str("ALLOWED_ORIGIN"),
         "auth_domain": _get_str("AUTH_DOMAIN"),
+        "ipfs_gateway": _get_str("IPFS_GATEWAY"),
         "token_ttl_minutes": _get_int("TOKEN_TTL_MINUTES", 20),
     }
 
