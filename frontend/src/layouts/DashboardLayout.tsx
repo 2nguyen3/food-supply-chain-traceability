@@ -139,32 +139,30 @@ export function DevelopmentPreview() {
   return (
     <div
       style={{
-        position: 'fixed',
-        bottom: 12,
-        left: 12,
-        zIndex: 70,
-        background: 'white',
-        padding: 8,
-        border: '1px solid var(--line)',
-        borderRadius: 12,
-        boxShadow: 'var(--shadow)',
+        display: 'flex',
+        justifyContent: 'center',
+        borderTop: '1px solid var(--line)',
+        background: 'var(--ivory)',
+        padding: '12px 16px',
       }}
     >
-      <Select
-        label="Xem trước vai trò (mô phỏng)"
-        value={session?.source === 'development-preview' ? session.wallet.roles[0] : ''}
-        onChange={(event) => {
-          const role = (event.target.value || null) as Role | null
-          setPreviewRole(role)
-          navigate(role ? `/${role}/overview` : '/trace')
-        }}
-      >
-        <option value="">Không chọn</option>
-        <option value="admin">Admin</option>
-        <option value="farmer">Farmer</option>
-        <option value="logistics">Logistics</option>
-        <option value="retailer">Retailer</option>
-      </Select>
+      <div style={{ width: 'min(100%, 280px)' }}>
+        <Select
+          label="Xem trước vai trò (mô phỏng)"
+          value={session?.source === 'development-preview' ? session.wallet.roles[0] : ''}
+          onChange={(event) => {
+            const role = (event.target.value || null) as Role | null
+            setPreviewRole(role)
+            navigate(role ? `/${role}/overview` : '/trace')
+          }}
+        >
+          <option value="">Không chọn</option>
+          <option value="admin">Admin</option>
+          <option value="farmer">Farmer</option>
+          <option value="logistics">Logistics</option>
+          <option value="retailer">Retailer</option>
+        </Select>
+      </div>
     </div>
   )
 }

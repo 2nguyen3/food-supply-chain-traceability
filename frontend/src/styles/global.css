@@ -130,7 +130,8 @@ h1 {
   background: var(--sage);
   text-decoration: none;
 }
-.menu-toggle {
+.public-header .menu-toggle,
+.topbar .menu-toggle {
   display: none;
 }
 .public-main {
@@ -462,11 +463,14 @@ h1 {
     width: min(85vw, 280px);
     z-index: 41;
   }
-  .menu-toggle {
+  .topbar .menu-toggle {
     display: inline-flex;
   }
 }
 @media (max-width: 680px) {
+  .public-header .menu-toggle {
+    display: inline-flex;
+  }
   .public-nav,
   .header-actions {
     display: none;
