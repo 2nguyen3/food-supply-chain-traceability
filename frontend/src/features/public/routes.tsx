@@ -1,8 +1,8 @@
 import type { RouteObject } from 'react-router-dom'
-import { Placeholder } from '../../app/Placeholder'
 import { HomePage } from './pages/HomePage'
 import { TraceSearchPage } from './pages/TraceSearchPage'
 import { TraceDemoPage } from './pages/TraceDemoPage'
+import { TraceBlockchainPage } from './pages/TraceBlockchainPage'
 export const publicRoutes: RouteObject[] = [
   {
     index: true,
@@ -18,10 +18,6 @@ export const publicRoutes: RouteObject[] = [
   },
   {
     path: 'trace/:chainId/:contractAddress/:tokenId',
-    element: (
-      <div className="container home-note">
-        <Placeholder title="Hành trình lô" feature="Đọc dữ liệu công khai từ Sepolia và IPFS" />
-      </div>
-    ),
+    element: <TraceBlockchainPage />,
   },
 ]

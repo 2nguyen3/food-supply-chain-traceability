@@ -1,6 +1,6 @@
-import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { Button, Card, ErrorState, LoadingState } from '../../../components/ui'
+import { Button, ErrorState, LoadingState } from '../../../components/ui'
 import { TraceBatchSummary } from '../components/TraceBatchSummary'
 import {
   TraceDocumentsPanel,
@@ -10,9 +10,9 @@ import {
   TraceTemperaturePanel,
 } from '../components/TracePanels'
 import { getDemoBatch, type DemoEvent } from '../mocks/traceDetailFixtures'
+import { TraceSections, type TraceSection } from '../components/TraceSections'
+import { TraceIcon } from '../components/TraceIcon'
 import '../styles/trace-detail.css'
-
-type PanelId = 'journey' | 'temperature' | 'nft' | 'documents' | 'technical'
 
 export function TraceDemoPage() {
   const { code: routeCode = '' } = useParams()
@@ -24,8 +24,6 @@ export function TraceDemoPage() {
   const previewExpired = previewFlags.includes('expired')
   const [attempt, setAttempt] = useState(0)
   const [resolved, setResolved] = useState({ code: '', attempt: -1, mockUnavailable: false })
-  const [activeTab, setActiveTab] = useState<PanelId>('journey')
-  const [openAccordions, setOpenAccordions] = useState<PanelId[]>(['journey'])
 
   useEffect(() => {
     const timer = window.setTimeout(() => setResolved({ code, attempt, mockUnavailable }), 350)
@@ -106,40 +104,41 @@ export function TraceDemoPage() {
     )
   }
 
-  const panels: { id: PanelId; label: string; content: ReactNode }[] = [
-    { id: 'journey', label: 'Hành trình lô', content: <TraceJourneyPanel events={events} /> },
+  const sections: TraceSection[] = [
+    {
+      id: 'journey',
+      label: 'Hành trình lô',
+      icon: 'route',
+      content: <TraceJourneyPanel events={events} />,
+    },
     {
       id: 'temperature',
-      label: 'Nhiệt độ vận chuyển',
+      label: 'Nhiệt độ',
+      mobileLabel: 'Nhiệt độ vận chuyển',
+      icon: 'thermo',
       content: <TraceTemperaturePanel batch={batch} />,
     },
-    { id: 'nft', label: 'Lịch sử NFT', content: <TraceNFTPanel ownership={batch.ownership} /> },
-    { id: 'documents', label: 'Hồ sơ công khai', content: <TraceDocumentsPanel batch={batch} /> },
+    {
+      id: 'nft',
+      label: 'Lịch sử NFT',
+      mobileLabel: 'Lịch sử NFT (ERC-721)',
+      icon: 'hash',
+      content: <TraceNFTPanel ownership={batch.ownership} />,
+    },
+    {
+      id: 'documents',
+      label: 'Hồ sơ công khai',
+      mobileLabel: 'Chứng chỉ & hồ sơ công khai',
+      icon: 'file',
+      content: <TraceDocumentsPanel batch={batch} />,
+    },
     {
       id: 'technical',
       label: 'Thông số & blockchain',
+      icon: 'link',
       content: <TraceTechnicalPanel batch={batch} />,
     },
   ]
-
-  function handleTabKey(event: KeyboardEvent<HTMLButtonElement>, index: number) {
-    let next = index
-    if (event.key === 'ArrowRight') next = (index + 1) % panels.length
-    else if (event.key === 'ArrowLeft') next = (index - 1 + panels.length) % panels.length
-    else if (event.key === 'Home') next = 0
-    else if (event.key === 'End') next = panels.length - 1
-    else return
-    event.preventDefault()
-    setActiveTab(panels[next].id)
-    const tabs = event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
-    tabs?.[next]?.focus()
-  }
-
-  function toggleAccordion(id: PanelId) {
-    setOpenAccordions((current) =>
-      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
-    )
-  }
 
   return (
     <div className="trace-detail-page">
@@ -156,80 +155,37 @@ export function TraceDemoPage() {
         )}
         {recalled && (
           <div className="trace-alert trace-alert-recall" role="alert">
-            <strong>Đã thu hồi</strong>
-            <p>
-              Lô đang hiển thị trạng thái thu hồi. Không tiếp tục sử dụng hoặc bán lô này; liên hệ
-              nơi mua để được hướng dẫn.
-            </p>
-            <small>Thu hồi không xóa trạng thái {batch.lifecycle} hay lịch sử NFT.</small>
+            <span className="trace-alert-icon">
+              <TraceIcon name="warn" />
+            </span>
+            <div>
+              <strong>Đã thu hồi</strong>
+              <p>
+                Lô đang hiển thị trạng thái thu hồi. Không tiếp tục sử dụng hoặc bán lô này; liên hệ
+                nơi mua để được hướng dẫn.
+              </p>
+              <small>Thu hồi không xóa trạng thái {batch.lifecycle} hay lịch sử NFT.</small>
+            </div>
           </div>
         )}
         {expired && (
           <div className="trace-alert trace-alert-expired" role="alert">
-            <strong>Lô đã hết hạn sử dụng</strong>
-            <p>
-              Trạng thái hết hạn được hiển thị riêng với vòng đời và trạng thái thu hồi. Không nên
-              sử dụng lô đã hết hạn.
-            </p>
+            <span className="trace-alert-icon">
+              <TraceIcon name="warn" />
+            </span>
+            <div>
+              <strong>Lô đã hết hạn sử dụng</strong>
+              <p>
+                Trạng thái hết hạn được hiển thị riêng với vòng đời và trạng thái thu hồi. Không nên
+                sử dụng lô đã hết hạn.
+              </p>
+            </div>
           </div>
         )}
 
         <TraceBatchSummary batch={batch} recalled={recalled} expired={expired} />
 
-        <Card className="trace-desktop-panels">
-          <div className="trace-tabs" role="tablist" aria-label="Nội dung truy xuất lô">
-            {panels.map((panel, index) => (
-              <button
-                key={panel.id}
-                id={`trace-tab-${panel.id}`}
-                type="button"
-                role="tab"
-                aria-selected={activeTab === panel.id}
-                aria-controls="trace-active-panel"
-                tabIndex={activeTab === panel.id ? 0 : -1}
-                onClick={() => setActiveTab(panel.id)}
-                onKeyDown={(event) => handleTabKey(event, index)}
-              >
-                {panel.label}
-              </button>
-            ))}
-          </div>
-          <div
-            id="trace-active-panel"
-            className="trace-tab-content"
-            role="tabpanel"
-            aria-labelledby={`trace-tab-${activeTab}`}
-            tabIndex={0}
-          >
-            {panels.find((panel) => panel.id === activeTab)?.content}
-          </div>
-        </Card>
-
-        <div className="trace-mobile-panels">
-          {panels.map((panel) => {
-            const open = openAccordions.includes(panel.id)
-            return (
-              <section className="trace-accordion" key={panel.id}>
-                <h2>
-                  <button
-                    type="button"
-                    aria-expanded={open}
-                    aria-controls={`trace-accordion-${panel.id}`}
-                    onClick={() => toggleAccordion(panel.id)}
-                  >
-                    {panel.label}
-                    <span aria-hidden="true">{open ? '−' : '+'}</span>
-                  </button>
-                </h2>
-                {open && (
-                  <div id={`trace-accordion-${panel.id}`} className="trace-accordion-content">
-                    {panel.content}
-                  </div>
-                )}
-              </section>
-            )
-          })}
-        </div>
+        <TraceSections sections={sections} />
 
         <p className="trace-detail-disclaimer">
           Thông tin mô phỏng trên trang này không bảo đảm an toàn thực phẩm hoặc tính xác thực của

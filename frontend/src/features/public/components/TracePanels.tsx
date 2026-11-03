@@ -1,14 +1,15 @@
 import { DataTable, EmptyState } from '../../../components/ui'
 import type { DemoBatch, DemoEvent, DemoOwnership, DemoReading } from '../mocks/traceDetailFixtures'
+import { TraceIcon, type TraceIconName } from './TraceIcon'
 import { TraceQRCode } from './TraceQRCode'
 
-const EVENT_LABELS: Record<DemoEvent['kind'], string> = {
-  BatchCreated: 'Khởi tạo lô và mint NFT',
-  TransferAccepted: 'Bàn giao đã xác nhận',
-  TransitRecorded: 'Bản ghi vận chuyển',
-  BatchSold: 'Đã bán',
-  IncidentReported: 'Báo cáo sự cố',
-  BatchRecalled: 'Thu hồi lô',
+const EVENT_META: Record<DemoEvent['kind'], { label: string; icon: TraceIconName }> = {
+  BatchCreated: { label: 'Khởi tạo lô và mint NFT', icon: 'leaf' },
+  TransferAccepted: { label: 'Bàn giao đã xác nhận', icon: 'route' },
+  TransitRecorded: { label: 'Bản ghi vận chuyển', icon: 'thermo' },
+  BatchSold: { label: 'Đã bán', icon: 'store' },
+  IncidentReported: { label: 'Báo cáo sự cố', icon: 'flag' },
+  BatchRecalled: { label: 'Thu hồi lô', icon: 'warn' },
 }
 
 function formatDateTime(value: string): string {
@@ -22,14 +23,6 @@ function formatDateTime(value: string): string {
   }).format(new Date(value))
 }
 
-function formatTime(value: string): string {
-  return new Intl.DateTimeFormat('vi-VN', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value))
-}
-
 export function TraceJourneyPanel({ events }: { events: DemoEvent[] }) {
   const sorted = [...events].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
   return (
@@ -37,12 +30,11 @@ export function TraceJourneyPanel({ events }: { events: DemoEvent[] }) {
       <ol className="trace-timeline">
         {sorted.map((event) => (
           <li key={event.id}>
-            <span
-              className={`trace-timeline-dot trace-event-${event.kind.toLowerCase()}`}
-              aria-hidden="true"
-            />
+            <span className={`trace-timeline-dot trace-event-${event.kind.toLowerCase()}`}>
+              <TraceIcon name={EVENT_META[event.kind].icon} />
+            </span>
             <div>
-              <h3>{EVENT_LABELS[event.kind]}</h3>
+              <h3>{EVENT_META[event.kind].label}</h3>
               <p>{event.detail}</p>
               <small>
                 {formatDateTime(event.at)} · Thời gian mô phỏng
@@ -55,11 +47,14 @@ export function TraceJourneyPanel({ events }: { events: DemoEvent[] }) {
         ))}
       </ol>
       <aside className="trace-journey-note">
-        <strong>Hành trình và NFT là hai lịch sử riêng</strong>
-        <p>
-          Một lần bàn giao chỉ xuất hiện một lần trong hành trình. Việc đổi chủ ERC-721 tương ứng
-          được liệt kê ở tab Lịch sử NFT.
-        </p>
+        <TraceIcon name="info" />
+        <div>
+          <strong>Hành trình ≠ lịch sử NFT</strong>
+          <p>
+            Mỗi bàn giao chỉ là một bước (TransferAccepted và Transfer cùng một lần chuyển quyền).
+            Lịch sử ERC-721 nằm ở tab riêng.
+          </p>
+        </div>
       </aside>
     </div>
   )
@@ -76,8 +71,8 @@ function TemperatureChart({ batch }: { batch: DemoBatch }) {
   const readings = batch.readings
   const width = 640
   const height = 260
-  const left = 48
-  const right = 24
+  const left = 72
+  const right = 28
   const top = 20
   const bottom = 44
   const low = Math.min(4, ...readings.map((reading) => reading.temperatureC - 2))
@@ -114,19 +109,36 @@ function TemperatureChart({ batch }: { batch: DemoBatch }) {
             </text>
           </g>
         ))}
+        {batch.minTemperatureC !== undefined && batch.maxTemperatureC !== undefined && (
+          <text
+            x={width - right - 4}
+            y={y(batch.maxTemperatureC) - 5}
+            textAnchor="end"
+            className="trace-chart-threshold"
+          >
+            Ngưỡng {batch.minTemperatureC}–{batch.maxTemperatureC}°C
+          </text>
+        )}
         <path d={path} fill="none" stroke="var(--forest)" strokeWidth="3" strokeLinejoin="round" />
         {readings.map((reading, index) => {
           const out = isOutOfRange(reading, batch)
           return (
             <g key={reading.id}>
-              <circle
-                cx={x(index)}
-                cy={y(reading.temperatureC)}
-                r="6"
-                fill={out ? 'var(--danger)' : 'var(--white)'}
-                stroke={out ? 'var(--danger)' : 'var(--forest)'}
-                strokeWidth="3"
-              />
+              {out ? (
+                <path
+                  d={`M${x(index)},${y(reading.temperatureC) - 11} l9,16 h-18z`}
+                  fill="var(--danger)"
+                />
+              ) : (
+                <circle
+                  cx={x(index)}
+                  cy={y(reading.temperatureC)}
+                  r="5"
+                  fill="var(--white)"
+                  stroke="var(--forest)"
+                  strokeWidth="2.5"
+                />
+              )}
               <text
                 x={x(index)}
                 y={y(reading.temperatureC) - 14}
@@ -136,7 +148,7 @@ function TemperatureChart({ batch }: { batch: DemoBatch }) {
                 {reading.temperatureC}°C
               </text>
               <text x={x(index)} y={height - 14} textAnchor="middle" className="trace-chart-axis">
-                {formatTime(reading.observedAt)}
+                #{reading.id}
               </text>
             </g>
           )
@@ -144,7 +156,7 @@ function TemperatureChart({ batch }: { batch: DemoBatch }) {
       </svg>
       <figcaption>
         Dữ liệu nhiệt độ và thời điểm quan sát là fixture mô phỏng, không phải đo từ thiết bị IoT
-        thật. Vùng xanh là ngưỡng 8–15°C minh họa.
+        thật. Vùng xanh là ngưỡng minh họa trong fixture.
       </figcaption>
     </figure>
   )
@@ -162,6 +174,7 @@ export function TraceTemperaturePanel({ batch }: { batch: DemoBatch }) {
   const exceeded = batch.readings.filter((reading) => isOutOfRange(reading, batch))
   return (
     <div className="trace-temperature-panel">
+      <TemperatureChart batch={batch} />
       {exceeded.length > 0 && (
         <div className="trace-warning" role="alert">
           <strong>
@@ -174,7 +187,6 @@ export function TraceTemperaturePanel({ batch }: { batch: DemoBatch }) {
           </p>
         </div>
       )}
-      <TemperatureChart batch={batch} />
       <DataTable
         columns={[
           {
@@ -184,23 +196,36 @@ export function TraceTemperaturePanel({ batch }: { batch: DemoBatch }) {
           },
           {
             key: 'time',
-            label: 'Thời điểm quan sát (mẫu)',
+            label: 'observedAt (mẫu)',
             render: (reading: DemoReading) => formatDateTime(reading.observedAt),
           },
           {
             key: 'temperature',
             label: 'Nhiệt độ',
-            render: (reading: DemoReading) => `${reading.temperatureC.toFixed(1)}°C`,
+            render: (reading: DemoReading) => (
+              <>
+                {isOutOfRange(reading, batch) && (
+                  <TraceIcon name="warn" className="trace-table-icon" />
+                )}
+                {reading.temperatureC.toFixed(1)}°C{' '}
+                <small className="mono">({Math.round(reading.temperatureC * 100)} centi°C)</small>
+              </>
+            ),
           },
           {
-            key: 'status',
-            label: 'Trạng thái',
-            render: (reading: DemoReading) =>
-              isOutOfRange(reading, batch) ? (
-                <span className="trace-table-warning">Vượt ngưỡng</span>
-              ) : (
-                'Trong ngưỡng'
-              ),
+            key: 'block',
+            label: 'Thời điểm block ghi',
+            render: () => 'Chưa có dữ liệu',
+          },
+          {
+            key: 'location',
+            label: 'Vị trí',
+            render: (reading: DemoReading) => reading.location ?? 'Chưa có dữ liệu',
+          },
+          {
+            key: 'transaction',
+            label: 'txHash',
+            render: (reading: DemoReading) => reading.transactionHash ?? 'Chưa có dữ liệu',
           },
         ]}
         rows={batch.readings}
@@ -223,21 +248,13 @@ export function TraceNFTPanel({ ownership }: { ownership: DemoOwnership[] }) {
         {ownership.map((entry, index) => (
           <li key={entry.id}>
             <span className="trace-ownership-kind">
-              {entry.kind === 'mint' ? 'Mint' : `Transfer #${index}`}
+              {entry.kind === 'mint' ? 'Mint · Transfer #1' : `Transfer #${index + 1}`}
             </span>
-            <div>
-              <small>Từ ví</small>
-              <strong className={entry.from === 'zero-address' ? 'mono' : undefined}>
-                {actorLabel(entry.from)}
-              </strong>
-            </div>
-            <span className="trace-ownership-arrow" aria-hidden="true">
-              →
-            </span>
-            <div>
-              <small>Đến ví</small>
-              <strong>{actorLabel(entry.to)}</strong>
-            </div>
+            <strong className={entry.from === 'zero-address' ? 'mono' : undefined}>
+              {actorLabel(entry.from)}
+            </strong>
+            <TraceIcon name="arrow" className="trace-ownership-arrow" />
+            <strong>{actorLabel(entry.to)}</strong>
             <div className="trace-ownership-meta">
               <span>{formatDateTime(entry.at)} · Mô phỏng</span>
               <span className="mono">
@@ -261,26 +278,34 @@ export function TraceDocumentsPanel({ batch }: { batch: DemoBatch }) {
       <div className="trace-documents">
         {batch.documents.map((document) => (
           <article className="trace-document" key={document.name}>
-            <div className="trace-document-icon" aria-hidden="true">
-              {document.name.endsWith('.pdf')
-                ? 'PDF'
-                : document.name.endsWith('.jpg')
-                  ? 'JPG'
-                  : 'JSON'}
+            <div className="trace-document-heading">
+              <span className="trace-document-icon">
+                <TraceIcon
+                  name={
+                    document.name.endsWith('.pdf')
+                      ? 'file'
+                      : document.name.endsWith('.jpg')
+                        ? 'image'
+                        : 'json'
+                  }
+                />
+              </span>
+              <div>
+                <h3>{document.name}</h3>
+                <p>{document.label}</p>
+              </div>
             </div>
-            <h3>{document.name}</h3>
-            <p>{document.label}</p>
-            <dl>
-              <div>
-                <dt>CID</dt>
-                <dd className="mono">{document.cid ?? 'Chưa có dữ liệu'}</dd>
-              </div>
-              <div>
-                <dt>SHA-256</dt>
-                <dd className="mono">{document.sha256 ?? 'Chưa có dữ liệu'}</dd>
-              </div>
-            </dl>
-            <span className="trace-document-status">Chưa xác minh</span>
+            <div className="trace-document-ids">
+              <span className="trace-document-id mono">
+                CID: {document.cid ?? 'Chưa có dữ liệu'}
+              </span>
+              <span className="trace-document-id mono">
+                SHA-256: {document.sha256 ?? 'Chưa có dữ liệu'}
+              </span>
+            </div>
+            <span className="trace-document-status">
+              <TraceIcon name="info" /> Chưa đối chiếu SHA-256
+            </span>
             {document.fileUrl ? (
               <a
                 className="button secondary"

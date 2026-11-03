@@ -1,5 +1,6 @@
 import type { Lifecycle } from '../../../domain/types'
 import type { DemoBatch } from '../mocks/traceDetailFixtures'
+import { TraceIcon } from './TraceIcon'
 
 const STEPS: { key: Lifecycle; label: string }[] = [
   { key: 'Created', label: 'Đã tạo' },
@@ -60,7 +61,8 @@ export function TraceBatchSummary({
           {recalled && <span className="trace-status trace-status-recalled">Đã thu hồi</span>}
         </div>
         <p className="trace-verification">
-          Chưa xác minh SHA-256: fixture chưa có tệp gốc và hash chuẩn để đối chiếu.
+          <TraceIcon name="info" />
+          <span>Chưa đối chiếu hash tệp công khai: fixture chưa có tệp gốc và SHA-256 chuẩn.</span>
         </p>
         <ol className="trace-stepper" aria-label="Vòng đời lô">
           {STEPS.map((step, index) => (
@@ -71,7 +73,9 @@ export function TraceBatchSummary({
               }
               aria-current={index === currentIndex ? 'step' : undefined}
             >
-              <span className="trace-stepper-dot">{index < currentIndex ? '✓' : index + 1}</span>
+              <span className="trace-stepper-dot">
+                {index < currentIndex ? <TraceIcon name="check" /> : index + 1}
+              </span>
               <span>{step.label}</span>
             </li>
           ))}

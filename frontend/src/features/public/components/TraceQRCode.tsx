@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { QRCodeCanvas } from 'qrcode.react'
 import { Button, Card } from '../../../components/ui'
+import { TraceIcon } from './TraceIcon'
 
 export function TraceQRCode({ code }: { code: string }) {
   const canvasHolder = useRef<HTMLDivElement>(null)
@@ -34,36 +35,48 @@ export function TraceQRCode({ code }: { code: string }) {
   return (
     <Card className="trace-qr-card">
       <div className="trace-qr-image" ref={canvasHolder}>
-        <QRCodeCanvas
-          value={url}
-          size={512}
-          level="M"
-          marginSize={1}
-          aria-label={`Mã QR demo cho lô ${code}`}
-        />
+        <div className="trace-qr-frame">
+          <QRCodeCanvas
+            value={url}
+            size={512}
+            level="M"
+            marginSize={1}
+            style={{ width: '100%', height: 'auto' }}
+            aria-label={`Mã QR demo cho lô ${code}`}
+          />
+        </div>
         <strong>{code}</strong>
       </div>
       <div className="trace-qr-copy">
         <h3>Mã QR truy xuất</h3>
-        <p>
-          QR này mở URL demo công khai. URL production sẽ dùng chainId, địa chỉ hợp đồng và tokenId
-          sau khi triển khai thật.
-        </p>
         <div className="trace-qr-actions">
           <Button variant="secondary" type="button" onClick={copyUrl}>
-            Sao chép liên kết
+            <TraceIcon name="copy" /> Sao chép liên kết
           </Button>
           <Link className="button secondary" to={path} target="_blank" rel="noopener noreferrer">
-            Mở trang demo
+            <TraceIcon name="external" /> Mở trang truy xuất
           </Link>
           <Button variant="secondary" type="button" onClick={downloadQr}>
-            Tải mã QR
+            <TraceIcon name="download" /> Tải mã QR
           </Button>
         </div>
-        <p className="trace-qr-url mono">{url}</p>
-        <p className="trace-qr-warning">
-          URL demo khác URL production; QR không chứa khóa riêng, hóa đơn hay trạng thái lô.
-        </p>
+        <details className="trace-qr-details">
+          <summary>
+            Thông tin kỹ thuật <TraceIcon name="down" />
+          </summary>
+          <div>
+            <p>URL được mã hóa trong QR (bản demo)</p>
+            <p className="trace-qr-url mono">{url}</p>
+            <p>URL chuẩn khi triển khai chính thức</p>
+            <p className="trace-qr-url mono">
+              /trace/11155111/{'{contractAddress}'}/{'{tokenId}'}
+            </p>
+            <p className="trace-qr-warning">
+              QR chỉ chứa địa chỉ công khai, không chứa khóa riêng, hóa đơn hay trạng thái. URL demo
+              không phải URL của hợp đồng đã triển khai.
+            </p>
+          </div>
+        </details>
         {feedback && (
           <p className="trace-qr-feedback" role="status">
             {feedback}
