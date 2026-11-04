@@ -31,7 +31,10 @@ export function FarmerBatchesPage() {
   const { session } = useSession()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [previewFarmId, setPreviewFarmId] = useState<PreviewFarmId | null>('FARM-A')
+  const [previewFarmId, setPreviewFarmId] = useState<PreviewFarmId | null>(() => {
+    const farm = searchParams.get('previewFarm')
+    return farm === 'FARM-B' ? 'FARM-B' : farm === 'none' ? null : 'FARM-A'
+  })
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<StatusFilter>('all')
   const [directCode, setDirectCode] = useState('')
@@ -77,6 +80,8 @@ export function FarmerBatchesPage() {
     const matchesStatus = status === 'all' || (status !== 'recalled' && batch.lifecycle === status)
     return matchesCode && matchesStatus
   }) ?? []
+  const detailPath = (code: string) =>
+    `/farmer/batches/${encodeURIComponent(code)}${preview ? `?previewFarm=${previewFarmId ?? 'none'}` : ''}`
 
   function openBatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -90,7 +95,7 @@ export function FarmerBatchesPage() {
       return
     }
     setDirectError('')
-    navigate(`/farmer/batches/${encodeURIComponent(code)}`)
+    navigate(detailPath(code))
   }
 
   function retry() {
@@ -224,7 +229,7 @@ export function FarmerBatchesPage() {
                   {batches.map((batch) => (
                     <tr key={batch.code}>
                       <td data-label="Mã lô">
-                        <Link className="farmer-batches-code" to={`/farmer/batches/${batch.code}`}>
+                        <Link className="farmer-batches-code" to={detailPath(batch.code)}>
                           {batch.code}
                         </Link>
                         <span className="farmer-batches-subtext">1.000 kg · 1 NFT</span>
