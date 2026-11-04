@@ -1,8 +1,10 @@
 import type { RouteObject } from 'react-router-dom'
 import { Placeholder } from '../../app/Placeholder'
+import { FarmerOverviewPage } from './pages/FarmerOverviewPage'
+import { FarmerBatchesPage } from './pages/FarmerBatchesPage'
 export const farmerRoutes: RouteObject[] = [
-  { path: 'overview', element: <Placeholder title="Tổng quan" feature="Lô của nông trại" /> },
-  { path: 'batches', element: <Placeholder title="Lô của tôi" feature="Danh sách lô đã tạo" /> },
+  { path: 'overview', element: <FarmerOverviewPage /> },
+  { path: 'batches', element: <FarmerBatchesPage /> },
   {
     path: 'batches/:code',
     element: <Placeholder title="Chi tiết lô" feature="Hồ sơ và lịch sử lô" />,
