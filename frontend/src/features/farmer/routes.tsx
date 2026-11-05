@@ -1,8 +1,9 @@
 import type { RouteObject } from 'react-router-dom'
-import { Placeholder } from '../../app/Placeholder'
 import { FarmerOverviewPage } from './pages/FarmerOverviewPage'
 import { FarmerBatchesPage } from './pages/FarmerBatchesPage'
 import { FarmerBatchDetailPage } from './pages/FarmerBatchDetailPage'
+import { FarmerCreatePage } from './pages/FarmerCreatePage'
+import { FarmerTransfersPage } from './pages/FarmerTransfersPage'
 export const farmerRoutes: RouteObject[] = [
   { path: 'overview', element: <FarmerOverviewPage /> },
   { path: 'batches', element: <FarmerBatchesPage /> },
@@ -12,10 +13,10 @@ export const farmerRoutes: RouteObject[] = [
   },
   {
     path: 'create',
-    element: <Placeholder title="Tạo lô NFT" feature="Quy trình tạo lô 1.000 kg" />,
+    element: <FarmerCreatePage />,
   },
   {
     path: 'transfers',
-    element: <Placeholder title="Chuyển giao" feature="Yêu cầu chuyển cho Logistics" />,
+    element: <FarmerTransfersPage />,
   },
 ]
