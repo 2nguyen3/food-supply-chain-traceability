@@ -1,0 +1,117 @@
+.farmer-transfers-page { display: grid; gap: 28px; min-width: 0; }
+.farmer-transfers-page .page-header { margin-bottom: 0; }
+.farmer-transfers-page .page-header p { max-width: 850px; }
+.farmer-transfers-section-title { margin: 0 0 14px; font-size: 20px; }
+.farmer-transfers-table-card { min-width: 0; overflow: hidden; padding: 0; }
+.farmer-transfers-table-wrap { min-width: 0; }
+.farmer-transfers-table { width: 100%; border-collapse: collapse; text-align: left; }
+.farmer-transfers-table th { border-bottom: 1px solid var(--line); padding: 16px 18px; color: var(--cocoa-soft); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.farmer-transfers-table td { border-bottom: 1px solid var(--line); padding: 16px 18px; vertical-align: middle; }
+.farmer-transfers-table tbody tr:last-child td { border-bottom: 0; }
+.farmer-transfers-table td:first-child, .farmer-transfers-table th:first-child { padding-left: 20px; }
+.farmer-transfers-table td:last-child, .farmer-transfers-table th:last-child { padding-right: 20px; }
+.farmer-transfers-table a { color: var(--forest); font-weight: 700; text-decoration: none; }
+.farmer-transfers-table a:hover { text-decoration: underline; }
+.farmer-transfers-batch-link { display: block; }
+.farmer-transfers-sub { display: block; margin-top: 4px; color: var(--cocoa-soft); font-size: 12px; font-weight: 400; overflow-wrap: anywhere; }
+.farmer-transfers-lifecycle { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 5px 10px; background: var(--ivory); white-space: nowrap; font-size: 12px; font-weight: 600; }
+.farmer-transfers-request-ref { color: var(--cocoa-soft); font-size: 12px; overflow-wrap: anywhere; }
+.farmer-transfers-table .button { white-space: nowrap; }
+.farmer-transfers-status { display: inline-flex; align-items: center; border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.farmer-transfers-status.pending { background: var(--cream); color: #875313; }
+.farmer-transfers-status.accepted { background: var(--sage); color: var(--forest-dark); }
+.farmer-transfers-status.cancelled, .farmer-transfers-status.rejected { background: var(--ivory); color: var(--cocoa-soft); }
+.farmer-transfers-pending-list { display: grid; gap: 14px; }
+.farmer-transfers-pending { min-width: 0; padding: 20px; }
+.farmer-transfers-pending-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.farmer-transfers-pending-head strong { overflow-wrap: anywhere; }
+.farmer-transfers-pending-head small { color: var(--cocoa-soft); }
+.farmer-transfers-pending p { margin: 10px 0; color: var(--cocoa-soft); }
+.farmer-transfers-pending-meta { display: flex; flex-wrap: wrap; gap: 10px 18px; margin-bottom: 16px; font-size: 13px; }
+.farmer-transfers-pending-meta a { color: var(--forest); font-weight: 700; }
+.farmer-transfers-history td { font-size: 13px; }
+.farmer-transfers-history-wallet { display: inline-grid; gap: 7px; min-width: 0; border: 1px solid var(--line); border-radius: 18px; padding: 9px 12px; background: white; color: var(--cocoa); text-align: left; }
+.farmer-transfers-history-wallet-name, .farmer-transfers-history-wallet-address { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.farmer-transfers-history-wallet-name { font-size: 14px; }
+.farmer-transfers-history-wallet-name svg { flex: 0 0 16px; width: 16px; height: 16px; color: var(--forest); }
+.farmer-transfers-history-wallet-address { color: var(--cocoa-soft); }
+.farmer-transfers-history-wallet-address .mono { overflow-wrap: anywhere; }
+.farmer-transfers-history-wallet-address button { display: grid; flex: 0 0 24px; place-items: center; width: 24px; height: 24px; border: 0; border-radius: 6px; padding: 3px; background: transparent; color: var(--cocoa-soft); cursor: pointer; }
+.farmer-transfers-history-wallet-address button:hover, .farmer-transfers-history-wallet-address button:focus-visible { background: var(--ivory); color: var(--forest); }
+.farmer-transfers-history-wallet-address button svg { width: 16px; height: 16px; }
+.farmer-transfers-note { margin: -6px 0 0; color: var(--cocoa-soft); font-size: 13px; line-height: 1.6; }
+.farmer-transfers-feedback { min-width: 0; }
+.farmer-transfers-select-dialog > p { margin: 0 0 18px; color: var(--cocoa-soft); line-height: 1.6; }
+.farmer-transfers-select-dialog fieldset { display: grid; gap: 10px; min-width: 0; margin: 0; border: 0; padding: 0; }
+.farmer-transfers-select-dialog legend { margin-bottom: 10px; font-weight: 700; }
+.farmer-transfers-recipient { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.farmer-transfers-recipient.disabled { opacity: .58; }
+.farmer-transfers-recipient label { display: flex; align-items: center; gap: 12px; min-width: 0; cursor: pointer; }
+.farmer-transfers-recipient.disabled label { cursor: not-allowed; }
+.farmer-transfers-recipient label > span { display: grid; gap: 3px; min-width: 0; }
+.farmer-transfers-recipient strong { font-weight: 700; }
+.farmer-transfers-recipient small { color: var(--cocoa-soft); font-size: 12px; }
+.farmer-transfers-recipient input { accent-color: var(--forest); width: 18px; height: 18px; }
+.farmer-transfers-wallet { display: inline-flex; align-items: center; gap: 6px; min-width: 0; border: 1px solid var(--line); border-radius: 999px; padding: 5px 8px; white-space: nowrap; font-size: 12px; }
+.farmer-transfers-wallet > svg { width: 16px; height: 16px; color: var(--forest); }
+.farmer-transfers-wallet button { display: grid; place-items: center; border: 0; padding: 2px; background: transparent; color: var(--cocoa-soft); cursor: pointer; }
+.farmer-transfers-wallet button svg { width: 15px; height: 15px; }
+.farmer-transfers-select-dialog > small { display: block; margin-top: 12px; color: var(--cocoa-soft); font-size: 11px; }
+.modal:has(.farmer-transfers-select-dialog), .modal:has(.farmer-transfers-progress) { width: min(100%, 640px); }
+.farmer-transfers-progress { display: grid; gap: 16px; min-width: 0; }
+.farmer-transfers-progress-mode { margin: 0; color: var(--cocoa-soft); font-size: 12px; }
+.farmer-transfers-method { justify-self: start; border-radius: 999px; padding: 5px 10px; background: var(--ivory); font-size: 12px; }
+.farmer-transfers-progress dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 0; border-radius: var(--radius); padding: 16px; background: var(--ivory); }
+.farmer-transfers-progress dl div { min-width: 0; }
+.farmer-transfers-progress dt { color: var(--cocoa-soft); font-size: 12px; }
+.farmer-transfers-progress dd { margin: 4px 0 0; overflow-wrap: anywhere; font-weight: 600; }
+.farmer-transfers-progress ol { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.farmer-transfers-progress li { display: flex; align-items: flex-start; gap: 10px; }
+.farmer-transfers-progress li > span:last-child { display: grid; gap: 2px; min-width: 0; }
+.farmer-transfers-progress li small { color: var(--cocoa-soft); font-size: 12px; }
+.farmer-transfers-progress-mark { display: grid; flex: 0 0 28px; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--line); color: var(--cocoa-soft); font-size: 12px; }
+.farmer-transfers-progress .complete .farmer-transfers-progress-mark { background: var(--forest); color: white; }
+.farmer-transfers-progress .active .farmer-transfers-progress-mark { background: var(--harvest); color: white; }
+.farmer-transfers-progress-mark svg { width: 16px; height: 16px; }
+.farmer-transfers-spinner { width: 14px; height: 14px; border: 2px solid #ffffff88; border-top-color: white; border-radius: 50%; animation: farmer-transfers-spin .8s linear infinite; }
+@keyframes farmer-transfers-spin { to { transform: rotate(360deg); } }
+.farmer-transfers-progress-success { margin: 0; border-radius: var(--radius); padding: 12px 14px; background: var(--sage); color: var(--forest-dark); font-weight: 600; }
+.farmer-transfers-dev-field { display: grid; gap: 6px; margin-top: 12px; }
+.farmer-transfers-dev-field label { font-size: 12px; font-weight: 700; }
+.farmer-transfers-dev-field select { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 8px; background: white; color: var(--cocoa); }
+.farmer-transfers-dev-field small { color: var(--cocoa-soft); }
+#development-preview:has(.farmer-transfers-dev-field) { max-width: 280px; }
+@media (max-width: 900px) {
+  .farmer-transfers-table th, .farmer-transfers-table td { padding: 12px; }
+  .farmer-transfers-table .button { white-space: normal; }
+}
+@media (max-width: 767px) {
+  .farmer-transfers-table thead { display: none; }
+  .farmer-transfers-table, .farmer-transfers-table tbody, .farmer-transfers-table tr, .farmer-transfers-table td { display: block; width: 100%; }
+  .farmer-transfers-table tr { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .farmer-transfers-table tr:last-child { border-bottom: 0; }
+  .farmer-transfers-table td, .farmer-transfers-table td:first-child, .farmer-transfers-table td:last-child { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; min-width: 0; border: 0; padding: 7px 0; text-align: right; overflow-wrap: anywhere; }
+  .farmer-transfers-table td::before { flex: 0 0 90px; color: var(--cocoa-soft); font-size: 11px; font-weight: 700; text-align: left; text-transform: uppercase; }
+  .farmer-transfers-table td:nth-child(1)::before { content: 'Lô'; }
+  .farmer-transfers-table td:nth-child(2)::before { content: 'Trạng thái'; }
+  .farmer-transfers-table td:nth-child(3)::before { content: 'Yêu cầu'; }
+  .farmer-transfers-table td:nth-child(4)::before { content: 'Hành động'; }
+  .farmer-transfers-history td:nth-child(1)::before { content: 'Request ID'; }
+  .farmer-transfers-history td:nth-child(2)::before { content: 'Lô'; }
+  .farmer-transfers-history td:nth-child(3)::before { content: 'Người nhận'; }
+  .farmer-transfers-history td:nth-child(4)::before { content: 'Trạng thái'; }
+  .farmer-transfers-history td:nth-child(5)::before { content: 'Tạo lúc'; }
+  .farmer-transfers-history td:nth-child(6)::before { content: 'Đóng lúc'; }
+  .farmer-transfers-table .button { width: 100%; }
+  .farmer-transfers-table:not(.farmer-transfers-history) td:last-child { display: grid; grid-template-columns: 90px minmax(0, 1fr); text-align: center; }
+  .farmer-transfers-select-dialog .farmer-transfers-recipient { align-items: flex-start; flex-direction: column; }
+  .farmer-transfers-wallet { margin-left: 30px; }
+}
+@media (max-width: 420px) {
+  .farmer-transfers-page { gap: 22px; }
+  .farmer-transfers-pending { padding: 16px; }
+  .farmer-transfers-progress dl { grid-template-columns: 1fr; }
+  .farmer-transfers-wallet { margin-left: 0; }
+  .modal:has(.farmer-transfers-select-dialog) .modal-body, .modal:has(.farmer-transfers-progress) .modal-body { padding: 14px; }
+}
+@media (prefers-reduced-motion: reduce) { .farmer-transfers-spinner { animation: none; } }
