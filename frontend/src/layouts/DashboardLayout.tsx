@@ -2,36 +2,43 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import type { Role } from '../domain/types'
 import { Logo, NetworkBadge, WalletChip } from '../components/common'
-import { Badge, Button, Select } from '../components/ui'
+import { DashboardIcon, type DashboardIconName } from '../components/common/DashboardIcon'
+import { Button, Select } from '../components/ui'
 import { useSession } from '../app/session'
 import { setPreviewRole } from '../mocks/session'
-type NavItem = { to: string; label: string }
+type NavItem = { to: string; label: string; icon: DashboardIconName }
+const ROLE_HEADER: Record<Role, { label: string; icon: DashboardIconName }> = {
+  admin: { label: 'Admin', icon: 'shield' },
+  farmer: { label: 'Farmer', icon: 'leaf' },
+  logistics: { label: 'Logistics', icon: 'truck' },
+  retailer: { label: 'Retailer', icon: 'store' },
+}
 const NAV: Record<Role, NavItem[]> = {
   admin: [
-    { to: 'overview', label: 'Tổng quan' },
-    { to: 'roles', label: 'Vai trò & quyền' },
-    { to: 'farms', label: 'Farmer ↔ farmId' },
-    { to: 'incidents', label: 'Sự cố & thu hồi' },
-    { to: 'batches', label: 'Tất cả lô' },
+    { to: 'overview', label: 'Tổng quan', icon: 'home' },
+    { to: 'roles', label: 'Vai trò & quyền', icon: 'users' },
+    { to: 'farms', label: 'Farmer ↔ farmId', icon: 'map' },
+    { to: 'incidents', label: 'Sự cố & thu hồi', icon: 'flag' },
+    { to: 'batches', label: 'Tất cả lô', icon: 'box' },
   ],
   farmer: [
-    { to: 'overview', label: 'Tổng quan' },
-    { to: 'batches', label: 'Lô của tôi' },
-    { to: 'create', label: 'Tạo lô NFT' },
-    { to: 'transfers', label: 'Chuyển giao' },
+    { to: 'overview', label: 'Tổng quan', icon: 'home' },
+    { to: 'batches', label: 'Lô của tôi', icon: 'box' },
+    { to: 'create', label: 'Tạo lô NFT', icon: 'plus' },
+    { to: 'transfers', label: 'Chuyển giao', icon: 'route' },
   ],
   logistics: [
-    { to: 'overview', label: 'Tổng quan' },
-    { to: 'incoming', label: 'Yêu cầu nhận lô' },
-    { to: 'batches', label: 'Lô đang vận chuyển' },
-    { to: 'outgoing', label: 'Giao cho Retailer' },
+    { to: 'overview', label: 'Tổng quan', icon: 'home' },
+    { to: 'incoming', label: 'Yêu cầu nhận lô', icon: 'download' },
+    { to: 'batches', label: 'Lô đang vận chuyển', icon: 'truck' },
+    { to: 'outgoing', label: 'Giao cho Retailer', icon: 'route' },
   ],
   retailer: [
-    { to: 'overview', label: 'Tổng quan' },
-    { to: 'incoming', label: 'Yêu cầu nhận lô' },
-    { to: 'batches', label: 'Lô quản lý' },
-    { to: 'sales', label: 'Đánh dấu đã bán' },
-    { to: 'incidents/new', label: 'Báo cáo sự cố' },
+    { to: 'overview', label: 'Tổng quan', icon: 'home' },
+    { to: 'incoming', label: 'Yêu cầu nhận lô', icon: 'download' },
+    { to: 'batches', label: 'Lô quản lý', icon: 'box' },
+    { to: 'sales', label: 'Đánh dấu đã bán', icon: 'store' },
+    { to: 'incidents/new', label: 'Báo cáo sự cố', icon: 'flag' },
   ],
 }
 export function Sidebar({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
@@ -48,37 +55,73 @@ export function Sidebar({ role, onNavigate }: { role: Role; onNavigate?: () => v
             onClick={onNavigate}
             className={({ isActive }) => `side-link ${isActive ? 'active' : ''}`}
           >
+            <DashboardIcon name={item.icon} className="side-icon" />
             {item.label}
           </NavLink>
         ))}
       </nav>
       <div className="side-foot">
-        <Link to="/trace">Mở trang tra cứu công khai</Link>
+        <Link to="/trace">
+          <DashboardIcon name="search" className="side-foot-icon" />
+          Mở trang tra cứu công khai
+        </Link>
       </div>
     </aside>
   )
 }
 export function Topbar({ role, onMenu }: { role: Role; onMenu: () => void }) {
   const { session, setProductionSession } = useSession()
+  const activeRole = session?.wallet.roles.includes(role) ? role : null
   return (
     <header className="topbar">
-      <Button
-        variant="secondary"
-        className="menu-toggle"
-        onClick={onMenu}
-        aria-label="Mở menu điều hướng"
-      >
-        Menu
-      </Button>
-      <Badge>{role}</Badge>
-      <div className="topbar-right">
-        <WalletChip wallet={session?.wallet ?? null} />
-        <NetworkBadge chainId={session?.wallet.chainId} />
-        {session?.source === 'chain' && (
-          <Button variant="secondary" onClick={() => setProductionSession(null)}>
-            Đăng xuất
-          </Button>
+      <div className="topbar-leading">
+        <button
+          type="button"
+          className="menu-toggle topbar-icon-button"
+          onClick={onMenu}
+          aria-label="Mở menu điều hướng"
+        >
+          <DashboardIcon name="menu" />
+        </button>
+        {activeRole ? (
+          <span className={`topbar-role topbar-role-${activeRole}`}>
+            <DashboardIcon name={ROLE_HEADER[activeRole].icon} />
+            {ROLE_HEADER[activeRole].label}
+          </span>
+        ) : (
+          <span className="topbar-role topbar-role-unassigned">Chưa có vai trò</span>
         )}
+        <WalletChip
+          wallet={session?.wallet ?? null}
+          label={activeRole ? ROLE_HEADER[activeRole].label : undefined}
+        />
+      </div>
+      <div className="topbar-right">
+        <NetworkBadge chainId={session?.wallet.chainId} />
+        <button
+          type="button"
+          className="topbar-icon-button topbar-bell"
+          aria-label="Thông báo chưa khả dụng"
+          title="Thông báo chưa khả dụng"
+          disabled
+        >
+          <DashboardIcon name="bell" />
+        </button>
+        <button
+          type="button"
+          className="topbar-logout"
+          aria-label="Đăng xuất"
+          title={
+            session?.source === 'chain'
+              ? 'Đăng xuất'
+              : 'Phiên xem trước: đổi vai trò trong công cụ development'
+          }
+          disabled={session?.source !== 'chain'}
+          onClick={() => setProductionSession(null)}
+        >
+          <DashboardIcon name="logout" />
+          <span>Đăng xuất</span>
+        </button>
       </div>
     </header>
   )
@@ -138,6 +181,7 @@ export function DevelopmentPreview() {
   if (!import.meta.env.DEV) return null
   return (
     <div
+      id="development-preview"
       style={{
         display: 'flex',
         justifyContent: 'center',
