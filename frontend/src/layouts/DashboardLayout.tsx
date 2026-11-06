@@ -4,7 +4,9 @@ import type { Role } from '../domain/types'
 import { Logo, NetworkBadge, WalletChip } from '../components/common'
 import { DashboardIcon, type DashboardIconName } from '../components/common/DashboardIcon'
 import { Button, Select } from '../components/ui'
+import { useToast } from '../components/ui/toast'
 import { useSession } from '../app/session'
+import { useRecalls } from '../features/admin/incidentStore'
 import { setPreviewRole } from '../mocks/session'
 type NavItem = { to: string; label: string; icon: DashboardIconName }
 const ROLE_HEADER: Record<Role, { label: string; icon: DashboardIconName }> = {
@@ -41,6 +43,7 @@ const NAV: Record<Role, NavItem[]> = {
     { to: 'incidents/new', label: 'Báo cáo sự cố', icon: 'flag' },
   ],
 }
+
 export function Sidebar({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
   return (
     <aside className="sidebar">
@@ -71,7 +74,27 @@ export function Sidebar({ role, onNavigate }: { role: Role; onNavigate?: () => v
 }
 export function Topbar({ role, onMenu }: { role: Role; onMenu: () => void }) {
   const { session, setProductionSession } = useSession()
+  const { showToast } = useToast()
+  const recalls = useRecalls()
+  const navigate = useNavigate()
   const activeRole = session?.wallet.roles.includes(role) ? role : null
+  const adminRecalls = activeRole === 'admin' ? Object.values(recalls) : []
+
+  function handleNotifications() {
+    if (!adminRecalls.length) {
+      showToast('Không có thông báo mới')
+      return
+    }
+    const latest = adminRecalls[adminRecalls.length - 1]
+    showToast(`${adminRecalls.length} thông báo: ${latest.batchCode} đã được thu hồi (${latest.incidentId})`, 'info')
+  }
+
+  function handleLogout() {
+    setProductionSession(null)
+    showToast('Đã đăng xuất', 'info')
+    navigate('/connect')
+  }
+
   return (
     <header className="topbar">
       <div className="topbar-leading">
@@ -101,11 +124,13 @@ export function Topbar({ role, onMenu }: { role: Role; onMenu: () => void }) {
         <button
           type="button"
           className="topbar-icon-button topbar-bell"
-          aria-label="Thông báo chưa khả dụng"
-          title="Thông báo chưa khả dụng"
-          disabled
+          aria-label={activeRole === 'admin' ? `Thông báo (${adminRecalls.length})` : 'Thông báo chưa khả dụng'}
+          title={activeRole === 'admin' ? 'Thông báo' : 'Thông báo chưa khả dụng'}
+          disabled={activeRole !== 'admin'}
+          onClick={handleNotifications}
         >
           <DashboardIcon name="bell" />
+          {adminRecalls.length > 0 && <span className="topbar-badge">{adminRecalls.length}</span>}
         </button>
         <button
           type="button"
@@ -117,7 +142,7 @@ export function Topbar({ role, onMenu }: { role: Role; onMenu: () => void }) {
               : 'Phiên xem trước: đổi vai trò trong công cụ development'
           }
           disabled={session?.source !== 'chain'}
-          onClick={() => setProductionSession(null)}
+          onClick={handleLogout}
         >
           <DashboardIcon name="logout" />
           <span>Đăng xuất</span>
@@ -129,7 +154,6 @@ export function Topbar({ role, onMenu }: { role: Role; onMenu: () => void }) {
 export function DashboardLayout({ role }: { role: Role }) {
   const [drawer, setDrawer] = useState(false)
   const location = useLocation()
-  const { session } = useSession()
   useEffect(() => setDrawer(false), [location.pathname])
   useEffect(() => {
     if (!drawer) return
@@ -165,11 +189,6 @@ export function DashboardLayout({ role }: { role: Role }) {
       )}
       <Topbar role={role} onMenu={() => setDrawer(true)} />
       <main className="dashboard-main" id="main">
-        {session?.source === 'development-preview' && (
-          <p className="muted" role="note">
-            Dữ liệu mô phỏng · chỉ xem trước giao diện, không xác thực on-chain.
-          </p>
-        )}
         <Outlet />
       </main>
     </div>

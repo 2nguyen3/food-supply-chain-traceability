@@ -1,32 +1,38 @@
 import type { RouteObject } from 'react-router-dom'
-import { Placeholder } from '../../app/Placeholder'
+import { BatchDetailPage } from './BatchDetailPage'
+import { BatchesPage } from './BatchesPage'
+import { FarmsPage } from './FarmsPage'
+import { IncidentDetailPage } from './IncidentDetailPage'
+import { IncidentsPage } from './IncidentsPage'
+import { AdminOverviewPage } from './OverviewPage'
+import { RolesPage } from './RolesPage'
 export const adminRoutes: RouteObject[] = [
   {
     path: 'overview',
-    element: <Placeholder title="Tổng quan" feature="Chỉ số lô, vai trò và sự cố" />,
+    element: <AdminOverviewPage />,
   },
   {
     path: 'roles',
-    element: <Placeholder title="Vai trò & quyền" feature="Cấp và thu hồi vai trò on-chain" />,
+    element: <RolesPage />,
   },
   {
     path: 'farms',
-    element: <Placeholder title="Farmer ↔ farmId" feature="Quản lý liên kết nông trại" />,
+    element: <FarmsPage />,
   },
   {
     path: 'incidents',
-    element: <Placeholder title="Sự cố & thu hồi" feature="Theo dõi báo cáo sự cố" />,
+    element: <IncidentsPage />,
   },
   {
     path: 'incidents/:id',
-    element: <Placeholder title="Điều tra sự cố" feature="Truy ngược và quyết định thu hồi" />,
+    element: <IncidentDetailPage />,
   },
   {
     path: 'batches',
-    element: <Placeholder title="Tất cả lô" feature="Danh sách lô trong hệ thống" />,
+    element: <BatchesPage />,
   },
   {
     path: 'batches/:code',
-    element: <Placeholder title="Chi tiết lô" feature="Thông tin lô dành cho Admin" />,
+    element: <BatchDetailPage />,
   },
 ]

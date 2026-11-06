@@ -7,7 +7,7 @@ export function PublicLayout() {
   const location = useLocation()
   const { session } = useSession()
   useEffect(() => setMenu(false), [location.pathname])
-  const dashboard = session?.wallet.roles[0]
+  const dashboard = session?.wallet.chainId === 11155111 ? session.wallet.roles[0] : undefined
   return (
     <div className="public-shell">
       <a className="skip-link" href="#main">
