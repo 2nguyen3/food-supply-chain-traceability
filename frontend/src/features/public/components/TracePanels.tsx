@@ -23,7 +23,7 @@ function formatDateTime(value: string): string {
   }).format(new Date(value))
 }
 
-export function TraceJourneyPanel({ events }: { events: DemoEvent[] }) {
+export function TraceJourneyPanel({ events, live = false }: { events: DemoEvent[]; live?: boolean }) {
   const sorted = [...events].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
   return (
     <div className="trace-journey-grid">
@@ -37,7 +37,7 @@ export function TraceJourneyPanel({ events }: { events: DemoEvent[] }) {
               <h3>{EVENT_META[event.kind].label}</h3>
               <p>{event.detail}</p>
               <small>
-                {formatDateTime(event.at)} · Thời gian mô phỏng
+                {formatDateTime(event.at)} · {live ? 'Thời gian block' : 'Thời gian mô phỏng'}
                 {event.transactionHash ? (
                   <span className="mono"> · {event.transactionHash}</span>
                 ) : null}
@@ -241,7 +241,7 @@ function actorLabel(actor: DemoOwnership['from'] | DemoOwnership['to']): string 
     : `${actor} · chưa có địa chỉ ví`
 }
 
-export function TraceNFTPanel({ ownership }: { ownership: DemoOwnership[] }) {
+export function TraceNFTPanel({ ownership, live = false }: { ownership: DemoOwnership[]; live?: boolean }) {
   return (
     <div>
       <ol className="trace-ownership">
@@ -256,17 +256,18 @@ export function TraceNFTPanel({ ownership }: { ownership: DemoOwnership[] }) {
             <TraceIcon name="arrow" className="trace-ownership-arrow" />
             <strong>{actorLabel(entry.to)}</strong>
             <div className="trace-ownership-meta">
-              <span>{formatDateTime(entry.at)} · Mô phỏng</span>
+              <span>{formatDateTime(entry.at)}{live ? '' : ' · Mô phỏng'}</span>
               <span className="mono">
-                {entry.transactionHash ?? 'Chưa có txHash trong fixture'}
+                {entry.transactionHash ?? 'Chưa có txHash'}
               </span>
             </div>
           </li>
         ))}
       </ol>
       <p className="trace-panel-note">
-        Mỗi dòng là một lần đổi chủ trong lịch sử ERC-721 mẫu. Mint bắt đầu từ zero-address. Không
-        có giao dịch Sepolia thật để mở trên Etherscan.
+        {live
+          ? 'Mỗi dòng là một sự kiện Transfer (ERC-721) đọc từ hợp đồng. Mint bắt đầu từ zero-address.'
+          : 'Mỗi dòng là một lần đổi chủ trong lịch sử ERC-721 mẫu. Mint bắt đầu từ zero-address. Không có giao dịch Sepolia thật để mở trên Etherscan.'}
       </p>
     </div>
   )
@@ -304,7 +305,14 @@ export function TraceDocumentsPanel({ batch }: { batch: DemoBatch }) {
               </span>
             </div>
             <span className="trace-document-status">
-              <TraceIcon name="info" /> Chưa đối chiếu SHA-256
+              <TraceIcon name="info" />{' '}
+              {document.verified === 'match'
+                ? 'SHA-256 của tệp tải về KHỚP hash trên blockchain'
+                : document.verified === 'mismatch'
+                  ? 'SHA-256 KHÔNG khớp hash trên blockchain: không coi là đã xác minh'
+                  : document.verified === 'unavailable'
+                    ? 'Không tải được tệp để đối chiếu SHA-256'
+                    : 'Chưa đối chiếu SHA-256'}
             </span>
             {document.fileUrl ? (
               <a
@@ -313,7 +321,7 @@ export function TraceDocumentsPanel({ batch }: { batch: DemoBatch }) {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Mở tệp demo
+                {batch.source === 'chain' ? 'Mở tệp gốc' : 'Mở tệp demo'}
               </a>
             ) : (
               <p className="trace-document-empty">Chưa có tệp để xem</p>
@@ -349,13 +357,16 @@ function TechnicalField({
 export function TraceTechnicalPanel({ batch }: { batch: DemoBatch }) {
   const threshold =
     batch.minTemperatureC !== undefined && batch.maxTemperatureC !== undefined
-      ? `${batch.minTemperatureC}–${batch.maxTemperatureC}°C (mẫu)`
+      ? `${batch.minTemperatureC}–${batch.maxTemperatureC}°C${batch.source === 'chain' ? '' : ' (mẫu)'}`
       : undefined
   return (
     <div className="trace-technical-panel">
       <dl className="trace-technical-fields">
         <TechnicalField label="tokenId" value={`#${batch.tokenId}`} mono />
-        <TechnicalField label="Mạng dự kiến" value="Ethereum Sepolia · 11155111 (chưa kết nối)" />
+        <TechnicalField
+          label={batch.source === 'chain' ? 'Mạng' : 'Mạng dự kiến'}
+          value={batch.network ?? 'Ethereum Sepolia · 11155111 (chưa kết nối)'}
+        />
         <TechnicalField label="Địa chỉ hợp đồng" value={batch.contractAddress} mono />
         <TechnicalField label="tokenURI" value={batch.tokenUri} mono />
         <TechnicalField label="Metadata CID" value={batch.metadataCid} mono />
@@ -363,7 +374,14 @@ export function TraceTechnicalPanel({ batch }: { batch: DemoBatch }) {
         <TechnicalField label="Phân bón" value={batch.fertilizer} />
         <TechnicalField label="Ngưỡng nhiệt độ" value={threshold} />
       </dl>
-      <TraceQRCode code={batch.code} />
+      <TraceQRCode
+        code={batch.code}
+        path={
+          batch.source === 'chain' && batch.contractAddress
+            ? `/trace/${batch.network?.split('· ')[1] ?? ''}/${batch.contractAddress}/${batch.tokenId}`
+            : undefined
+        }
+      />
     </div>
   )
 }

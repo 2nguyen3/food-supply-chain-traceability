@@ -4,10 +4,10 @@ import { QRCodeCanvas } from 'qrcode.react'
 import { Button, Card } from '../../../components/ui'
 import { TraceIcon } from './TraceIcon'
 
-export function TraceQRCode({ code }: { code: string }) {
+export function TraceQRCode({ code, path: livePath }: { code: string; path?: string }) {
   const canvasHolder = useRef<HTMLDivElement>(null)
   const [feedback, setFeedback] = useState('')
-  const path = `/trace/demo/${code}`
+  const path = livePath ?? `/trace/demo/${code}`
   const url = new URL(path, window.location.origin).toString()
 
   async function copyUrl() {

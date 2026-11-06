@@ -39,8 +39,8 @@ export function TraceBatchSummary({
     <section className="trace-summary" aria-labelledby="trace-batch-code">
       <div className="trace-summary-image">
         <img
-          src="/images/home/coconut-cluster.jpg"
-          alt="Buồng dừa xanh dùng làm ảnh minh họa cho lô mẫu"
+          src={batch.imageUrl ?? '/images/home/coconut-cluster.jpg'}
+          alt={batch.imageUrl ? `Ảnh gốc của lô ${batch.code}` : 'Buồng dừa xanh dùng làm ảnh minh họa cho lô mẫu'}
           width="1024"
           height="1536"
         />
@@ -48,7 +48,7 @@ export function TraceBatchSummary({
         <div className="trace-summary-image-copy">
           <p>Lô dừa tươi · 1.000 kg · 1 NFT</p>
           <h1 id="trace-batch-code">{batch.code}</h1>
-          <span>Ảnh minh họa · không phải ảnh gốc của lô</span>
+          <span>{batch.imageUrl ? 'Ảnh gốc từ IPFS · SHA-256 khớp blockchain' : 'Ảnh minh họa · không phải ảnh gốc của lô'}</span>
         </div>
       </div>
 
@@ -62,7 +62,13 @@ export function TraceBatchSummary({
         </div>
         <p className="trace-verification">
           <TraceIcon name="info" />
-          <span>Chưa đối chiếu hash tệp công khai: fixture chưa có tệp gốc và SHA-256 chuẩn.</span>
+          <span>
+            {batch.source === 'chain'
+              ? batch.documents.every((d) => d.verified === 'match')
+                ? 'Đã đối chiếu SHA-256 của cả 3 tệp công khai với hash trên blockchain: khớp.'
+                : 'Chưa xác minh đủ 3 tệp công khai: xem tab Hồ sơ công khai để biết tệp nào chưa khớp hoặc chưa tải được.'
+              : 'Chưa đối chiếu hash tệp công khai: fixture chưa có tệp gốc và SHA-256 chuẩn.'}
+          </span>
         </p>
         <ol className="trace-stepper" aria-label="Vòng đời lô">
           {STEPS.map((step, index) => (
@@ -88,7 +94,10 @@ export function TraceBatchSummary({
           <Field label="Ngày thu hoạch" value={batch.harvestDate} />
           <Field label="Hạn sử dụng" value={batch.expiryDate} />
           <Field label="Khối lượng" value="1.000 kg" />
-          <Field label="Chủ sở hữu NFT" value={`${batch.owner} · chưa có địa chỉ ví`} />
+          <Field
+            label="Chủ sở hữu NFT"
+            value={batch.source === 'chain' ? batch.owner : `${batch.owner} · chưa có địa chỉ ví`}
+          />
         </dl>
       </div>
     </section>

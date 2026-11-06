@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Button, Card, LoadingState } from '../../../components/ui'
+import { config, networkName } from '../../../config/env'
+import { TraceDetailView } from '../components/TraceDetailView'
 import {
   inspectPublicChain,
   parseProductionTraceParams,
@@ -29,7 +31,7 @@ const PARAMETER_MESSAGES: Record<TraceParameterError, { title: string; descripti
 }
 
 const STATUS_MESSAGES: Record<
-  PublicReadStatus['kind'],
+  Exclude<PublicReadStatus['kind'], 'ok'>,
   { title: string; description: string; connection: string; retry: boolean }
 > = {
   unconfigured: {
@@ -120,6 +122,13 @@ const STATUS_MESSAGES: Record<
 
 type ReadState = { key: string; status: PublicReadStatus }
 
+// Thông báo viết sẵn nhắc tới Sepolia; thay theo mạng được cấu hình (Sepolia hoặc Hardhat local)
+const netText = (text: string) =>
+  text
+    .replaceAll('Ethereum Sepolia', networkName)
+    .replaceAll('Sepolia', networkName)
+    .replaceAll('11155111', String(config.chainId))
+
 export function TraceBlockchainPage() {
   const { chainId, contractAddress, tokenId } = useParams()
   const parsed = useMemo(
@@ -148,18 +157,19 @@ export function TraceBlockchainPage() {
 
   const loading = !!identity && readState?.key !== requestKey
   const status = !loading ? readState?.status : undefined
-  const message = parsed.error
-    ? PARAMETER_MESSAGES[parsed.error]
-    : status
-      ? STATUS_MESSAGES[status.kind]
-      : undefined
+  const failure = status && status.kind !== 'ok' ? STATUS_MESSAGES[status.kind] : undefined
+  const message = parsed.error ? PARAMETER_MESSAGES[parsed.error] : failure
   const connectionLabel = loading
     ? 'Đang kết nối RPC…'
     : parsed.error
       ? 'URL không hợp lệ'
-      : status
-        ? STATUS_MESSAGES[status.kind].connection
-        : 'Chưa đọc dữ liệu'
+      : failure
+        ? failure.connection
+        : status
+          ? 'Đã đọc dữ liệu'
+          : 'Chưa đọc dữ liệu'
+
+  if (status?.kind === 'ok') return <TraceDetailView batch={status.batch} />
 
   return (
     <div className="trace-blockchain-page">
@@ -171,14 +181,16 @@ export function TraceBlockchainPage() {
         <div className="trace-blockchain-heading">
           <span className="trace-blockchain-eyebrow">Truy xuất công khai</span>
           <h1>Truy xuất nguồn gốc lô</h1>
-          <p>Đường dẫn này dành cho dữ liệu Sepolia thật và có thể xem mà không cần kết nối ví.</p>
+          <p>
+            {netText('Đường dẫn này dành cho dữ liệu Sepolia thật và có thể xem mà không cần kết nối ví.')}
+          </p>
         </div>
 
         <Card className="trace-blockchain-identity" aria-label="Định danh Blockchain">
           <div className="trace-blockchain-network">
             <span className="trace-blockchain-network-dot" aria-hidden="true" />
-            <span>Ethereum Sepolia</span>
-            <small>{connectionLabel}</small>
+            <span>{networkName}</span>
+            <small>{netText(connectionLabel)}</small>
           </div>
           <dl>
             <div>
@@ -206,13 +218,13 @@ export function TraceBlockchainPage() {
                 <span />
                 <span />
               </div>
-              <LoadingState label="Đang đọc thông tin mạng và hợp đồng từ Sepolia…" />
+              <LoadingState label={netText('Đang đọc thông tin mạng và hợp đồng từ Sepolia…')} />
             </>
           ) : message ? (
             <div
               role={
                 parsed.error ||
-                (status && status.kind !== 'unconfigured' && status.kind !== 'abiMissing')
+                (failure && status?.kind !== 'unconfigured' && status?.kind !== 'abiMissing')
                   ? 'alert'
                   : 'status'
               }
@@ -220,15 +232,15 @@ export function TraceBlockchainPage() {
               <span className="trace-blockchain-state-mark" aria-hidden="true">
                 {parsed.error ? '!' : 'i'}
               </span>
-              <h2>{message.title}</h2>
-              <p>{message.description}</p>
+              <h2>{netText(message.title)}</h2>
+              <p>{netText(message.description)}</p>
               {status?.kind === 'unconfigured' && (
                 <p className="trace-blockchain-missing">
                   Cấu hình còn thiếu: <span className="mono">{status.missing.join(', ')}</span>
                 </p>
               )}
               <div className="trace-blockchain-actions">
-                {status && STATUS_MESSAGES[status.kind].retry && (
+                {failure?.retry && (
                   <Button type="button" onClick={() => setAttempt((value) => value + 1)}>
                     Thử lại
                   </Button>
