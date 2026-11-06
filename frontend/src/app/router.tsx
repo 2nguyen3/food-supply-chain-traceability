@@ -1,9 +1,10 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { PublicLayout } from '../layouts/PublicLayout'
-import { DashboardLayout, DevelopmentPreview } from '../layouts/DashboardLayout'
+import { DashboardLayout } from '../layouts/DashboardLayout'
 import { SessionProvider, useSession } from './session'
 import { ErrorState } from '../components/ui'
+import { ToastProvider } from '../components/ui/toast'
 import { publicRoutes } from '../features/public/routes'
 import { authRoutes } from '../features/auth/routes'
 import { adminRoutes } from '../features/admin/routes'
@@ -16,16 +17,17 @@ function Root() {
   const missing = import.meta.env.PROD ? validateProductionConfig() : []
   return (
     <SessionProvider>
-      {missing.length > 0 && (
-        <div
-          role="alert"
-          style={{ padding: '8px 16px', background: 'var(--cream)', color: 'var(--cocoa)' }}
-        >
-          Thiếu cấu hình triển khai: {missing.join(', ')}
-        </div>
-      )}
-      <Outlet />
-      <DevelopmentPreview />
+      <ToastProvider>
+        {missing.length > 0 && (
+          <div
+            role="alert"
+            style={{ padding: '8px 16px', background: 'var(--cream)', color: 'var(--cocoa)' }}
+          >
+            Thiếu cấu hình triển khai: {missing.join(', ')}
+          </div>
+        )}
+        <Outlet />
+      </ToastProvider>
     </SessionProvider>
   )
 }

@@ -1,0 +1,134 @@
+.farms-table th:nth-child(1) {
+  width: 24%;
+}
+
+.farms-table th:nth-child(2) {
+  width: 24%;
+}
+
+.farms-table th:nth-child(3) {
+  width: 16%;
+}
+
+.farms-table th:nth-child(4) {
+  width: 12%;
+}
+
+.farms-table th:nth-child(5) {
+  width: 24%;
+}
+
+.farms-name {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.farms-address {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+}
+
+.farms-address-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--cocoa-soft);
+}
+
+.farms-address-line .mono {
+  color: var(--cocoa);
+  font-size: 14px;
+}
+
+.farms-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cocoa-soft);
+}
+
+.farms-copy:hover {
+  background: var(--cream);
+  color: var(--forest);
+}
+
+.farms-farmid {
+  color: var(--cocoa);
+  font-size: 15px;
+}
+
+.farms-unassigned {
+  color: var(--danger);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.farms-batches {
+  color: var(--cocoa);
+  font-size: 15px;
+}
+
+.farms-form {
+  display: grid;
+  gap: 8px;
+}
+
+.farms-form label {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.farms-form input {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid #d9d3c4;
+  border-radius: 12px;
+  background: var(--white);
+  color: var(--cocoa);
+  font-size: 16px;
+}
+
+.farms-hint {
+  color: var(--cocoa-soft);
+  font-size: 14px;
+}
+
+.farms-note {
+  margin: 6px 0 0;
+  color: var(--cocoa-soft);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.farms-modal-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
+.farms-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.farms-error {
+  color: var(--danger);
+  font-size: 14px;
+  font-weight: 600;
+}
