@@ -21,6 +21,7 @@ const paths = {
   bell: 'M6 8a6 6 0 1112 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 004 0',
   logout: 'M9 4H5v16h4M16 8l4 4-4 4M20 12H9',
   menu: 'M4 6h16M4 12h16M4 18h16',
+  clock: 'M12 6v6l4 2M12 2a10 10 0 100 20 10 10 0 000-20z',
 } as const
 
 export type DashboardIconName = keyof typeof paths
