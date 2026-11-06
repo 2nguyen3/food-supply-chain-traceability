@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DashboardIcon } from '../../components/common/DashboardIcon'
 
-export const SAMPLE_BATCHES = [
+const SAMPLE_BATCHES = [
   {
     code: 'COCONUT-001',
     weight: '1.000 kg · 1 NFT',

@@ -1,10 +1,10 @@
-import { useNavigate, Link } from 'react-router-dom'
-import { DashboardIcon } from '../../components/common/DashboardIcon'
+import { useNavigate } from 'react-router-dom'
+import { DashboardIcon, type DashboardIconName } from '../../components/common/DashboardIcon'
 
 export default function LogisticsOverviewPage() {
   const navigate = useNavigate()
 
-  const stats = [
+  const stats: { label: string; count: number; icon: DashboardIconName | 'thermometer'; bg: string; color: string }[] = [
     {
       label: 'Yêu cầu chờ nhận',
       count: 0,
@@ -81,7 +81,7 @@ export default function LogisticsOverviewPage() {
                   <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z" />
                 </svg>
               ) : (
-                <DashboardIcon name={s.icon as any} />
+                <DashboardIcon name={s.icon} />
               )}
             </div>
             <div>
