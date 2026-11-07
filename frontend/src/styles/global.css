@@ -420,6 +420,52 @@ h1 {
 .topbar-bell {
   position: relative;
 }
+.topbar-notifications {
+  position: relative;
+  flex: none;
+}
+.topbar-notification-panel {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 20;
+  width: min(320px, calc(100vw - 32px));
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: white;
+  padding: 8px;
+  box-shadow: 0 12px 32px #46372122;
+  color: var(--cocoa-soft);
+}
+.topbar-notification-title {
+  margin: 0;
+  padding: 12px 12px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.topbar-notification-empty {
+  margin: 0;
+  padding: 0 12px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.topbar-notification-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.topbar-notification-list a {
+  display: block;
+  border-radius: 12px;
+  padding: 8px 12px;
+  color: var(--cocoa);
+  font-size: 14px;
+  text-decoration: none;
+}
+.topbar-notification-list a:hover,
+.topbar-notification-list a:focus-visible {
+  background: var(--ivory);
+}
 .topbar-badge {
   position: absolute;
   top: -5px;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import type { Role } from '../domain/types'
 import { Logo, NetworkBadge, WalletChip } from '../components/common'
@@ -6,7 +6,6 @@ import { DashboardIcon, type DashboardIconName } from '../components/common/Dash
 import { Button, Select } from '../components/ui'
 import { useToast } from '../components/ui/toast'
 import { useSession } from '../app/session'
-import { useRecalls } from '../features/admin/incidentStore'
 import { setPreviewRole } from '../mocks/session'
 type NavItem = { to: string; label: string; icon: DashboardIconName }
 const ROLE_HEADER: Record<Role, { label: string; icon: DashboardIconName }> = {
@@ -72,22 +71,72 @@ export function Sidebar({ role, onNavigate }: { role: Role; onNavigate?: () => v
     </aside>
   )
 }
+
+type NotificationItem = { id: string; text: string; to: string }
+
+function NotificationBell({ items = [] }: { items?: readonly NotificationItem[] }) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function closeOnOutsideClick(event: PointerEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setOpen(false)
+        buttonRef.current?.focus()
+      }
+    }
+    document.addEventListener('pointerdown', closeOnOutsideClick)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [open])
+
+  return (
+    <div className="topbar-notifications" ref={containerRef}>
+      <button
+        ref={buttonRef}
+        type="button"
+        className="topbar-icon-button topbar-bell"
+        aria-label={`Thông báo (${items.length})`}
+        aria-expanded={open}
+        aria-controls={open ? 'topbar-notification-panel' : undefined}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <DashboardIcon name="bell" />
+        {items.length > 0 && <span className="topbar-badge">{items.length}</span>}
+      </button>
+      {open && (
+        <div className="topbar-notification-panel" id="topbar-notification-panel">
+          <p className="topbar-notification-title">Thông báo</p>
+          {items.length === 0 ? (
+            <p className="topbar-notification-empty">Không có thông báo mới.</p>
+          ) : (
+            <ul className="topbar-notification-list">
+              {items.map((item) => (
+                <li key={item.id}>
+                  <Link to={item.to} onClick={() => setOpen(false)}>{item.text}</Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Topbar({ role, onMenu }: { role: Role; onMenu: () => void }) {
   const { session, setProductionSession } = useSession()
   const { showToast } = useToast()
-  const recalls = useRecalls()
   const navigate = useNavigate()
   const activeRole = session?.wallet.roles.includes(role) ? role : null
-  const adminRecalls = activeRole === 'admin' ? Object.values(recalls) : []
-
-  function handleNotifications() {
-    if (!adminRecalls.length) {
-      showToast('Không có thông báo mới')
-      return
-    }
-    const latest = adminRecalls[adminRecalls.length - 1]
-    showToast(`${adminRecalls.length} thông báo: ${latest.batchCode} đã được thu hồi (${latest.incidentId})`, 'info')
-  }
 
   function handleLogout() {
     setProductionSession(null)
@@ -121,17 +170,7 @@ export function Topbar({ role, onMenu }: { role: Role; onMenu: () => void }) {
       </div>
       <div className="topbar-right">
         <NetworkBadge chainId={session?.wallet.chainId} />
-        <button
-          type="button"
-          className="topbar-icon-button topbar-bell"
-          aria-label={activeRole === 'admin' ? `Thông báo (${adminRecalls.length})` : 'Thông báo chưa khả dụng'}
-          title={activeRole === 'admin' ? 'Thông báo' : 'Thông báo chưa khả dụng'}
-          disabled={activeRole !== 'admin'}
-          onClick={handleNotifications}
-        >
-          <DashboardIcon name="bell" />
-          {adminRecalls.length > 0 && <span className="topbar-badge">{adminRecalls.length}</span>}
-        </button>
+        <NotificationBell />
         <button
           type="button"
           className="topbar-logout"
