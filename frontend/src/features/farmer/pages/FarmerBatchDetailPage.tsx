@@ -1,21 +1,24 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { createPortal } from 'react-dom'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
-import { useSession } from '../../../app/session'
+import { Link, useParams } from 'react-router-dom'
 import { Card, EmptyState, ErrorState, LoadingState } from '../../../components/ui'
+import { config } from '../../../config/env'
 import type { Lifecycle } from '../../../domain/types'
 import { TraceJourneyPanel, TraceNFTPanel, TraceTemperaturePanel } from '../../public/components/TracePanels'
 import { TraceQRCode } from '../../public/components/TraceQRCode'
 import { TraceIcon } from '../../public/components/TraceIcon'
-import { getDemoBatch, type DemoBatch } from '../../public/mocks/traceDetailFixtures'
+import type { DemoBatch } from '../../public/mocks/traceDetailFixtures'
+import {
+  inspectPublicChain,
+  parseProductionTraceParams,
+  type PublicReadStatus,
+} from '../../public/services/publicChainReader'
 import { FarmerOverviewIcon } from '../components/FarmerOverviewIcon'
-import { downloadPreviewInvoice, FARMER_PRIVATE_INVOICE, farmerPreviewEvents } from '../mocks/farmerBatchDetailPreview'
-import type { FarmerOverviewBatch, PreviewFarmId } from '../mocks/farmerOverviewFixtures'
-import { farmerOverviewReader, type FarmerOverviewResult } from '../services/farmerOverviewService'
+import { PrivateDocumentsPanel } from '../components/PrivateDocumentsPanel'
+import { useFarmerSnapshot } from '../hooks/useFarmerSnapshot'
+import type { FarmerBatch } from '../types'
 import '../../public/styles/trace-detail.css'
 import '../styles/farmer-batch-detail.css'
 
-type ReadState = { key: string; result: FarmerOverviewResult }
 type TabId = 'overview' | 'public' | 'private' | 'temperature' | 'journey' | 'qr'
 type IconName = 'box' | 'file' | 'lock' | 'thermo' | 'route' | 'qr'
 
@@ -86,12 +89,36 @@ function DetailField({ label, value, mono = false }: { label: string; value?: st
   )
 }
 
-function OverviewPanel({ batch, farmerBatch, previewFarmId }: { batch: DemoBatch; farmerBatch: FarmerOverviewBatch; previewFarmId: PreviewFarmId | null }) {
-  const isOwner = farmerBatch.ownerFarmId === previewFarmId
-  const expired = batch.expiryDate ? Date.now() >= Date.parse(batch.expiryDate) : false
-  const threshold = batch.minTemperatureC !== undefined && batch.maxTemperatureC !== undefined
-    ? `${batch.minTemperatureC}–${batch.maxTemperatureC}°C`
-    : undefined
+function transferBlockReason(batch: FarmerBatch): string {
+  if (!batch.ownedByMe) return 'Bạn không phải chủ sở hữu NFT hiện tại.'
+  if (batch.recalled) return 'Lô đã bị thu hồi.'
+  if (batch.expired) return 'Lô đã hết hạn.'
+  if (batch.pending) return 'Lô đang có yêu cầu bàn giao chờ xử lý.'
+  if (batch.lifecycle !== 'Created') return 'Chỉ lô ở trạng thái Created mới chuyển được.'
+  return ''
+}
+
+const formatMoment = (value?: string, withTime = false) => {
+  if (!value) return undefined
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
+  }).format(date)
+}
+
+const tracePath = (tokenId: string) => `/trace/${config.chainId}/${config.contractAddress}/${tokenId}`
+
+function OverviewPanel({ batch, farmerBatch }: { batch: DemoBatch; farmerBatch: FarmerBatch }) {
+  const reason = transferBlockReason(farmerBatch)
+  const threshold =
+    batch.minTemperatureC !== undefined && batch.maxTemperatureC !== undefined
+      ? `${batch.minTemperatureC}–${batch.maxTemperatureC}°C`
+      : undefined
   return (
     <div className="farmer-detail-overview">
       <Card className="farmer-detail-info-card">
@@ -102,20 +129,20 @@ function OverviewPanel({ batch, farmerBatch, previewFarmId }: { batch: DemoBatch
           <DetailField label="farmId" value={farmerBatch.farmId} mono />
           <DetailField label="farmLocation" value={batch.farmLocation} />
           <DetailField label="harvestGroupId" value={farmerBatch.harvestGroupId} mono />
-          <DetailField label="harvestDate" value={batch.harvestDate} />
-          <DetailField label="expiryDate" value={batch.expiryDate} />
+          <DetailField label="harvestDate" value={formatMoment(batch.harvestDate)} />
+          <DetailField label="expiryDate" value={formatMoment(batch.expiryDate, true)} />
           <DetailField label="Giống" value={batch.variety} />
           <DetailField label="Phân bón" value={batch.fertilizer} />
           <DetailField label="Nhiệt độ min/max" value={threshold} />
-          <DetailField label="Chủ sở hữu NFT" value={`${farmerBatch.ownerLabel} · chưa có địa chỉ ví`} />
+          <DetailField label="Chủ sở hữu NFT" value={farmerBatch.ownedByMe ? `Bạn · ${farmerBatch.owner}` : `${farmerBatch.ownerLabel} · ${farmerBatch.owner}`} mono />
           <div>
             <dt>Vòng đời / Hết hạn / Thu hồi</dt>
             <dd className="farmer-detail-badges">
               <span className={`farmer-detail-status farmer-detail-status-${farmerBatch.lifecycle.toLowerCase()}`}>
                 {farmerBatch.lifecycle} · {STATUS_LABELS[farmerBatch.lifecycle]}
               </span>
-              {expired && <span className="farmer-detail-status farmer-detail-status-expired">Hết hạn</span>}
-              {batch.recalled && <span className="farmer-detail-status farmer-detail-status-recalled">Đã thu hồi</span>}
+              {farmerBatch.expired && <span className="farmer-detail-status farmer-detail-status-expired">Hết hạn</span>}
+              {farmerBatch.recalled && <span className="farmer-detail-status farmer-detail-status-recalled">Đã thu hồi</span>}
             </dd>
           </div>
           <DetailField label="metadata URI" value={batch.tokenUri} mono />
@@ -123,7 +150,7 @@ function OverviewPanel({ batch, farmerBatch, previewFarmId }: { batch: DemoBatch
       </Card>
       <Card className="farmer-detail-actions">
         <h2>Hành động</h2>
-        {isOwner ? (
+        {!reason ? (
           <Link className="button farmer-detail-transfer" to="/farmer/transfers">
             Yêu cầu chuyển cho Logistics
           </Link>
@@ -132,17 +159,22 @@ function OverviewPanel({ batch, farmerBatch, previewFarmId }: { batch: DemoBatch
             <button className="button farmer-detail-transfer" type="button" disabled>
               Yêu cầu chuyển cho Logistics
             </button>
-            <p className="farmer-detail-reason">Bạn không phải chủ sở hữu NFT hiện tại.</p>
+            <p className="farmer-detail-reason">{reason}</p>
           </>
         )}
-        <Link className="button secondary farmer-detail-public-link" to={`/trace/demo/${batch.code}`}>
+        <Link className="button secondary farmer-detail-public-link" to={tracePath(farmerBatch.tokenId)}>
           <TraceIcon name="external" /> Mở trang công khai
         </Link>
-        {!isOwner && <p>Bạn đang xem lô đã chuyển quyền sở hữu ở chế độ chỉ đọc.</p>}
       </Card>
     </div>
   )
 }
+
+const VERIFY_TEXT = {
+  match: 'SHA-256 của tệp tải về KHỚP hash trên blockchain.',
+  mismatch: 'SHA-256 KHÔNG khớp hash trên blockchain: không coi là đã xác minh.',
+  unavailable: 'Không tải được tệp để đối chiếu SHA-256.',
+} as const
 
 function PublicDocumentsPanel({ batch }: { batch: DemoBatch }) {
   const names = ['metadata.json', 'certificate.pdf', 'batch.jpg'] as const
@@ -155,47 +187,33 @@ function PublicDocumentsPanel({ batch }: { batch: DemoBatch }) {
           <Card className="farmer-detail-document" key={name}>
             <div className="farmer-detail-document-head">
               <span className="farmer-detail-document-icon"><TraceIcon name={icons[name]} /></span>
-              <div><h2>{name} <span className="farmer-detail-fixture">FIXTURE</span></h2><p>{document?.label ?? 'Hồ sơ công khai'}</p></div>
+              <div><h2>{name}</h2><p>{document?.label ?? 'Hồ sơ công khai'}</p></div>
             </div>
             <div className="farmer-detail-file-facts">
               <p><span>CID</span> <code>{document?.cid ?? 'Chưa có dữ liệu'}</code></p>
+              {document?.cid && <p><span>ipfs://</span> <code>ipfs://{document.cid}</code></p>}
               <p><span>SHA-256</span> <code>{document?.sha256 ?? 'Chưa có dữ liệu'}</code></p>
             </div>
             <div className="farmer-detail-file-actions">
               {document?.fileUrl ? (
-                <><a className="button secondary" href={document.fileUrl} target="_blank" rel="noreferrer"><TraceIcon name="external" /> Xem bản gốc</a><a className="button secondary" href={document.fileUrl} download={name}><TraceIcon name="download" /> Mở/tải tệp</a></>
+                <>
+                  <a className="button secondary" href={document.fileUrl} target="_blank" rel="noreferrer"><TraceIcon name="external" /> Xem bản gốc</a>
+                  <a className="button secondary" href={document.fileUrl} download={name}><TraceIcon name="download" /> Tải tệp</a>
+                </>
               ) : (
-                <><button className="button secondary" disabled type="button" title="Chưa có tệp gốc"><TraceIcon name="external" /> Xem bản gốc</button><button className="button secondary" disabled type="button" title="Chưa có tệp gốc"><TraceIcon name="download" /> Mở/tải tệp</button></>
+                <>
+                  <button className="button secondary" disabled type="button" title="Chưa có tệp gốc"><TraceIcon name="external" /> Xem bản gốc</button>
+                  <button className="button secondary" disabled type="button" title="Chưa có tệp gốc"><TraceIcon name="download" /> Tải tệp</button>
+                </>
               )}
             </div>
-            <div className="farmer-detail-hash"><strong><TraceIcon name="hash" /> Kiểm tra SHA-256</strong><p><TraceIcon name="info" /> Chưa đối chiếu SHA-256.</p></div>
+            <div className="farmer-detail-hash">
+              <strong><TraceIcon name="hash" /> Kiểm tra SHA-256</strong>
+              <p><TraceIcon name="info" /> {document?.verified ? VERIFY_TEXT[document.verified] : 'Chưa đối chiếu SHA-256.'}</p>
+            </div>
           </Card>
         )
       })}
-    </div>
-  )
-}
-
-function PrivateDocumentsPanel({ batch, preview }: { batch: DemoBatch; preview: boolean }) {
-  const [grants, setGrants] = useState<Record<'Logistics' | 'Retailer', boolean>>({ Logistics: false, Retailer: false })
-  const invoice = preview && batch.code === FARMER_PRIVATE_INVOICE.batchCode ? FARMER_PRIVATE_INVOICE : null
-  return (
-    <div className="farmer-detail-private">
-      <div className="farmer-detail-private-notice"><TraceIcon name="warn" /><div><strong>Hóa đơn bán buôn riêng (ACL ngoài chuỗi)</strong><p>Hóa đơn không công khai. Chỉ ví tải lên và ví được cấp quyền mới đọc được khi dịch vụ tài liệu riêng được tích hợp.</p></div></div>
-      <Card className="farmer-detail-invoice-card">
-        {invoice ? (
-          <>
-            <div className="farmer-detail-invoice-head"><span className="farmer-detail-document-icon"><DetailIcon name="lock" /></span><div><h2>{invoice.name}</h2><p>{invoice.documentId} · gắn token #{batch.tokenId} · tệp được tạo khi tải · mô phỏng, chưa mã hóa</p></div></div>
-            <div className="farmer-detail-invoice-preview"><span className="farmer-detail-watermark">XEM TRƯỚC</span><strong>Hóa đơn bán buôn số {invoice.number}</strong><p>Bên bán: {batch.farmId} · Lô {batch.code} · 1.000 kg dừa nguyên trái</p><p>Nội dung giả lập, không có giá trị pháp lý.</p><button type="button" className="button secondary" onClick={() => downloadPreviewInvoice(batch)}><TraceIcon name="download" /> Tải xuống (mô phỏng)</button></div>
-          </>
-        ) : <EmptyState title="Chưa có hóa đơn riêng" description="Chưa có tệp mẫu hoặc dịch vụ tài liệu riêng cho lô này." />}
-      </Card>
-      <Card className="farmer-detail-grants-card">
-        <h2>Quản lý quyền truy cập</h2>
-        <p>Chỉ uploader hợp lệ mới có thể cấp hoặc thu hồi quyền thật khi backend ACL sẵn sàng.</p>
-        {invoice ? <div className="farmer-detail-grants-list">{(['Logistics', 'Retailer'] as const).map((actor) => <div key={actor} className="farmer-detail-grant-row"><span className="farmer-detail-wallet"><TraceIcon name="file" /><strong>{actor}</strong><small>Ví mẫu · chưa có địa chỉ</small></span><span>{grants[actor] ? 'Đã cấp quyền xem trước' : 'Chưa có quyền'}</span><button type="button" className={`button ${grants[actor] ? 'secondary' : ''}`} onClick={() => setGrants((current) => ({ ...current, [actor]: !current[actor] }))}>{grants[actor] ? 'Thu hồi' : 'Cấp quyền đọc'}</button></div>)}</div> : <EmptyState title="Chưa có dữ liệu quyền truy cập" />}
-        {invoice && <p className="farmer-detail-grant-disclaimer">Thao tác chỉ đổi trạng thái mô phỏng trong trình duyệt; không gọi ACL, ký ví hoặc ghi Blockchain.</p>}
-      </Card>
     </div>
   )
 }
@@ -205,68 +223,47 @@ function JourneyPanel({ batch }: { batch: DemoBatch }) {
     <div className="farmer-detail-journey">
       <Card>
         <h2>Dòng thời gian vận hành (provenance)</h2>
-        <TraceJourneyPanel events={farmerPreviewEvents(batch)} />
+        <TraceJourneyPanel events={batch.events} live />
       </Card>
       <Card>
         <h2>Lịch sử sở hữu ERC-721</h2>
-        <TraceNFTPanel ownership={batch.ownership} />
+        <TraceNFTPanel ownership={batch.ownership} wallets={batch.wallets} />
       </Card>
     </div>
   )
 }
 
+type ChainState = { key: string; status: PublicReadStatus }
+
 export function FarmerBatchDetailPage() {
   const { code: routeCode = '' } = useParams()
   const code = routeCode.trim().toUpperCase()
-  const { session } = useSession()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const { result, loading, reload } = useFarmerSnapshot()
   const [tab, setTab] = useState<TabId>('overview')
   const [mobileOpen, setMobileOpen] = useState<TabId | null>('overview')
-  const [attempt, setAttempt] = useState(0)
-  const [readState, setReadState] = useState<ReadState | null>(null)
+  const [chain, setChain] = useState<ChainState | null>(null)
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
-  const preview = import.meta.env.DEV && session?.source === 'development-preview'
-  const previewFarm = searchParams.get('previewFarm')
-  const previewFarmId: PreviewFarmId | null = preview
-    ? previewFarm === 'FARM-B' ? 'FARM-B' : previewFarm === 'none' ? null : 'FARM-A'
-    : null
-  const previewState = preview ? searchParams.get('previewState') : null
-  const previewHost = preview ? document.getElementById('development-preview') : null
-  const key = `${code}:${session?.wallet.address ?? 'none'}:${session?.source ?? 'none'}:${previewFarmId ?? 'none'}:${previewState ?? ''}:${attempt}`
 
+  const snapshot = result?.kind === 'ready' ? result.snapshot : null
+  const farmerBatch = snapshot?.batches.find((item) => item.code === code)
+  const chainKey = farmerBatch ? `${farmerBatch.tokenId}:${farmerBatch.lifecycle}:${farmerBatch.owner}` : ''
+
+  // Hồ sơ, sự kiện, nhiệt độ của lô: dùng bộ đọc chain công khai (đối chiếu SHA-256 với hash trên chain)
   useEffect(() => {
-    if (!session) return
+    if (!farmerBatch || !config.contractAddress) return
+    const parsed = parseProductionTraceParams(String(config.chainId), config.contractAddress, farmerBatch.tokenId)
+    if (!parsed.identity) return
     const controller = new AbortController()
-    const timer = window.setTimeout(() => {
-      farmerOverviewReader.read(session, preview ? previewFarmId : null, controller.signal).then(
-        (result) => {
-          if (!controller.signal.aborted) setReadState({ key, result: previewState === 'error' ? { kind: 'error' } : result })
-        },
-        () => {
-          if (!controller.signal.aborted) setReadState({ key, result: { kind: 'error' } })
-        },
-      )
-    }, 220)
-    return () => { controller.abort(); window.clearTimeout(timer) }
-  }, [session, preview, previewFarmId, previewState, key])
-
-  function changePreviewFarm(value: string) {
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current)
-      next.set('previewFarm', value || 'none')
-      return next
-    })
-  }
-
-  function retry() {
-    if (previewState === 'error') {
-      setSearchParams((current) => {
-        const next = new URLSearchParams(current)
-        next.delete('previewState')
-        return next
-      })
-    } else setAttempt((current) => current + 1)
-  }
+    inspectPublicChain(parsed.identity, controller.signal).then(
+      (status) => {
+        if (!controller.signal.aborted) setChain({ key: chainKey, status })
+      },
+      () => {
+        if (!controller.signal.aborted) setChain({ key: chainKey, status: { kind: 'rpcUnavailable' } })
+      },
+    )
+    return () => controller.abort()
+  }, [farmerBatch, chainKey])
 
   function handleTabKey(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     let next = index
@@ -280,60 +277,39 @@ export function FarmerBatchDetailPage() {
     tabRefs.current[next]?.focus()
   }
 
-  const result = readState?.key === key ? readState.result : null
-  const demoBatch = getDemoBatch(code)
-  const snapshot = result?.kind === 'ready' ? result.snapshot : null
-  const farmerBatch = snapshot?.batches.find((item) => item.code === code)
-  const consistent = snapshot && demoBatch && farmerBatch && demoBatch.tokenId === farmerBatch.tokenId
-    && demoBatch.farmId === farmerBatch.farmId
-    && demoBatch.harvestGroupId === farmerBatch.harvestGroupId
-    && demoBatch.lifecycle === farmerBatch.lifecycle
-    && demoBatch.owner === farmerBatch.ownerLabel
-    && demoBatch.farmer === snapshot.farmerLabel
-  const backPath = `/farmer/batches${preview ? `?previewFarm=${previewFarmId ?? 'none'}` : ''}`
-  const renderPanel = (panel: TabId, batch: DemoBatch, record: FarmerOverviewBatch) => {
+  const chainResult = chain?.key === chainKey ? chain.status : null
+  const demoBatch = chainResult?.kind === 'ok' ? chainResult.batch : null
+  const chainLoading = !!farmerBatch && !chainResult
+  const renderPanel = (panel: TabId, batch: DemoBatch, record: FarmerBatch) => {
     switch (panel) {
-      case 'overview': return <OverviewPanel batch={batch} farmerBatch={record} previewFarmId={previewFarmId} />
+      case 'overview': return <OverviewPanel batch={batch} farmerBatch={record} />
       case 'public': return <PublicDocumentsPanel batch={batch} />
-      case 'private': return <PrivateDocumentsPanel key={batch.code} batch={batch} preview={preview} />
+      case 'private': return <PrivateDocumentsPanel tokenId={record.tokenId} />
       case 'temperature': return <Card className="farmer-detail-section"><TraceTemperaturePanel batch={batch} /></Card>
       case 'journey': return <JourneyPanel batch={batch} />
-      case 'qr': return <TraceQRCode code={batch.code} />
+      case 'qr': return <TraceQRCode code={batch.code} path={tracePath(record.tokenId)} />
     }
   }
 
   return (
     <div className="farmer-detail-page">
-      {previewHost && createPortal(
-        <div className="farmer-detail-dev-field">
-          <label htmlFor="farmer-detail-preview-farm">Xem trước nông trại (mô phỏng)</label>
-          <select id="farmer-detail-preview-farm" value={previewFarmId ?? ''} onChange={(event) => changePreviewFarm(event.target.value)}>
-            <option value="FARM-A">Farmer A · FARM-A</option>
-            <option value="FARM-B">Farmer B · FARM-B</option>
-            <option value="">Chưa có farmId</option>
-          </select>
-          <small>Chỉ đổi dữ liệu mẫu, không đổi ví hoặc farmId thật.</small>
-        </div>,
-        previewHost,
-      )}
-
       <nav className="farmer-detail-breadcrumb" aria-label="Đường dẫn">
-        <Link to={backPath}>Lô hàng</Link><span aria-hidden="true">›</span><span>{code || 'Chi tiết lô'}</span>
+        <Link to="/farmer/batches">Lô hàng</Link><span aria-hidden="true">›</span><span>{code || 'Chi tiết lô'}</span>
       </nav>
 
-      {!result && session ? (
+      {loading || chainLoading ? (
         <Card className="farmer-detail-feedback"><LoadingState label="Đang tải thông tin lô…" /></Card>
       ) : result?.kind === 'error' ? (
-        <ErrorState title="Không thể đọc dữ liệu lô" description={previewState === 'error' ? 'Trạng thái lỗi mô phỏng; không phải sự cố RPC thật.' : 'Nguồn dữ liệu hiện chưa khả dụng.'} action={<button className="button" type="button" onClick={retry}>Thử lại</button>} />
+        <ErrorState title="Không thể đọc dữ liệu lô" description={result.message} action={<button className="button" type="button" onClick={reload}>Thử lại</button>} />
       ) : result?.kind === 'unassigned' ? (
-        <EmptyState title="Chưa có liên kết farmId" description="Chưa thể xác định các lô do Farmer hiện tại tạo từ dữ liệu đã tích hợp." />
-      ) : result?.kind === 'ready' && !demoBatch ? (
-        <ErrorState title="Không tìm thấy lô" description={`Không có lô mang mã ${code || 'được yêu cầu'} trong dữ liệu hiện có.`} action={<Link className="button" to={backPath}>Về Lô của tôi</Link>} />
-      ) : result?.kind === 'ready' && !farmerBatch ? (
-        <ErrorState title="Không có quyền xem lô này" description="Lô không thuộc phạm vi Farmer đang xem. Quyền truy cập quản lý không được suy ra từ chủ sở hữu NFT hiện tại." action={<Link className="button" to={backPath}>Về Lô của tôi</Link>} />
-      ) : result?.kind === 'ready' && !consistent ? (
-        <ErrorState title="Dữ liệu lô không nhất quán" description="Fixture Farmer và hồ sơ công khai chưa khớp. Không hiển thị chi tiết có thể gây hiểu nhầm." />
-      ) : demoBatch && farmerBatch && consistent ? (
+        <EmptyState title="Chưa có liên kết farmId" description="Admin cần gán farmId cho ví của bạn trên hợp đồng." />
+      ) : result?.kind === 'noWallet' ? (
+        <EmptyState title="Cần đăng nhập bằng ví thật" description="Phiên xem giao diện không có dữ liệu trên blockchain. Hãy đăng xuất rồi kết nối MetaMask." />
+      ) : snapshot && !farmerBatch ? (
+        <ErrorState title="Không tìm thấy lô" description={`Bạn chưa tạo lô nào mang mã ${code || 'được yêu cầu'}. Chỉ hiển thị các lô do ví này tạo.`} action={<Link className="button" to="/farmer/batches">Về Lô của tôi</Link>} />
+      ) : farmerBatch && chainResult && chainResult.kind !== 'ok' ? (
+        <ErrorState title="Không đọc được chi tiết lô" description="Không đọc được hồ sơ hoặc sự kiện của lô từ blockchain hay IPFS. Hãy thử lại." action={<button className="button" type="button" onClick={reload}>Thử lại</button>} />
+      ) : demoBatch && farmerBatch ? (
         <>
           <header className="farmer-detail-header">
             <div>
@@ -344,12 +320,8 @@ export function FarmerBatchDetailPage() {
               <span className={`farmer-detail-status farmer-detail-status-${farmerBatch.lifecycle.toLowerCase()}`}>
                 {farmerBatch.lifecycle} · {STATUS_LABELS[farmerBatch.lifecycle]}
               </span>
-              {demoBatch.expiryDate && Date.now() >= Date.parse(demoBatch.expiryDate) && (
-                <span className="farmer-detail-status farmer-detail-status-expired">Hết hạn</span>
-              )}
-              {demoBatch.recalled && (
-                <span className="farmer-detail-status farmer-detail-status-recalled">Đã thu hồi</span>
-              )}
+              {farmerBatch.expired && <span className="farmer-detail-status farmer-detail-status-expired">Hết hạn</span>}
+              {farmerBatch.recalled && <span className="farmer-detail-status farmer-detail-status-recalled">Đã thu hồi</span>}
             </div>
           </header>
 
@@ -377,10 +349,12 @@ export function FarmerBatchDetailPage() {
             {renderPanel(tab, demoBatch, farmerBatch)}
           </div>
           <div className="farmer-detail-mobile-sections">
-            {TABS.map((item) => <section className="farmer-detail-accordion" key={item.id}>
-              <h2><button type="button" aria-expanded={mobileOpen === item.id} aria-controls={`farmer-detail-mobile-${item.id}`} onClick={() => setMobileOpen((current) => current === item.id ? null : item.id)}><DetailIcon name={item.icon} />{item.label}<TraceIcon name="down" /></button></h2>
-              {mobileOpen === item.id && <div id={`farmer-detail-mobile-${item.id}`} className="farmer-detail-accordion-content">{renderPanel(item.id, demoBatch, farmerBatch)}</div>}
-            </section>)}
+            {TABS.map((item) => (
+              <section className="farmer-detail-accordion" key={item.id}>
+                <h2><button type="button" aria-expanded={mobileOpen === item.id} aria-controls={`farmer-detail-mobile-${item.id}`} onClick={() => setMobileOpen((current) => current === item.id ? null : item.id)}><DetailIcon name={item.icon} />{item.label}<TraceIcon name="down" /></button></h2>
+                {mobileOpen === item.id && <div id={`farmer-detail-mobile-${item.id}`} className="farmer-detail-accordion-content">{renderPanel(item.id, demoBatch, farmerBatch)}</div>}
+              </section>
+            ))}
           </div>
         </>
       ) : null}

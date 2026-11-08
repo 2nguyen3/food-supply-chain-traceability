@@ -616,3 +616,5 @@
     padding: 16px;
   }
 }
+
+.farmer-detail-wrap { overflow-wrap: anywhere; word-break: break-all; font-size: 12px; }

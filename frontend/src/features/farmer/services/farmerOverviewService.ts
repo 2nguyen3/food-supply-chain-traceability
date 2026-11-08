@@ -1,50 +1,42 @@
 import type { Session } from '../../../mocks/session'
-import {
-  getFarmerOverviewFixture,
-  type FarmerOverviewSnapshot,
-  type PreviewFarmId,
-} from '../mocks/farmerOverviewFixtures'
+import type { FarmerOverviewResult, FarmerSnapshot } from '../types'
+import { FarmerChainError, readFarmerSnapshot } from './farmerChain'
 
-export type FarmerOverviewResult =
-  | { kind: 'ready'; source: 'development-preview'; snapshot: FarmerOverviewSnapshot }
-  | { kind: 'unassigned' }
-  | { kind: 'error' }
+export type { FarmerOverviewResult }
 
 export interface FarmerOverviewReader {
-  read(
-    session: Session,
-    previewFarmId: PreviewFarmId | null,
-    signal?: AbortSignal,
-  ): Promise<FarmerOverviewResult>
+  read(session: Session, signal?: AbortSignal): Promise<FarmerOverviewResult>
 }
 
+/** Đọc dữ liệu Farmer từ hợp đồng theo ví đã đăng nhập; phiên xem giao diện (dev) không có dữ liệu thật. */
 export const farmerOverviewReader: FarmerOverviewReader = {
-  async read(session, previewFarmId, signal) {
+  async read(session, signal) {
     if (signal?.aborted) throw new DOMException('Đã hủy', 'AbortError')
-    if (session.source !== 'development-preview' || !import.meta.env.DEV || !previewFarmId) {
-      // Chưa có contract ABI, farmId mapping hoặc indexer để lập danh sách từ ví production.
-      return { kind: 'unassigned' }
-    }
-    return {
-      kind: 'ready',
-      source: 'development-preview',
-      snapshot: getFarmerOverviewFixture(previewFarmId),
+    if (session.source !== 'chain') return { kind: 'noWallet' }
+    try {
+      const result = await readFarmerSnapshot(session.wallet.address, signal)
+      if (result === 'unassigned') return { kind: 'unassigned' }
+      return { kind: 'ready', snapshot: result }
+    } catch (error) {
+      if (signal?.aborted) throw error
+      return {
+        kind: 'error',
+        message: error instanceof FarmerChainError ? error.message : 'Không đọc được dữ liệu.',
+      }
     }
   },
 }
 
-export function getFarmerOverviewKpis(snapshot: FarmerOverviewSnapshot) {
-  const owned = snapshot.batches.filter((batch) => batch.ownerFarmId === snapshot.farmId)
+export function getFarmerOverviewKpis(snapshot: FarmerSnapshot) {
+  const owned = snapshot.batches.filter((batch) => batch.ownedByMe)
   const pending = snapshot.transfers.filter((transfer) => transfer.status === 'pending')
-  const acceptedCodes = new Set(
-    snapshot.transfers
-      .filter((transfer) => transfer.status === 'accepted')
-      .map((transfer) => transfer.batchCode),
+  const accepted = new Set(
+    snapshot.transfers.filter((transfer) => transfer.status === 'accepted').map((t) => t.tokenId),
   )
   return {
     created: snapshot.batches.length,
     owned: owned.length,
     pending: pending.length,
-    transferred: acceptedCodes.size,
+    transferred: accepted.size,
   }
 }

@@ -12,9 +12,33 @@
 .farmer-create-heading h2 { margin: 0 0 6px; font-size: clamp(22px, 2.5vw, 28px); }
 .farmer-create-heading p { margin: 0; color: var(--cocoa-soft); }
 .farmer-create-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 24px; }
-.farmer-create-grid .field { min-width: 0; }
-.farmer-create-grid input[readonly] { background: var(--ivory); color: var(--cocoa-soft); }
-.farmer-create-footnote { margin: 20px 0 0; color: var(--cocoa-soft); font-size: 13px; }
+/* Ô nhập luôn ở cùng độ cao trên một hàng, kể cả khi có thông báo lỗi hoặc không có. */
+.farmer-create-grid .field {
+  min-width: 0;
+  align-content: start;
+  grid-template-rows: auto 44px minmax(18px, auto);
+}
+.farmer-create-grid .field label { min-height: 18px; }
+.farmer-create-grid .field input { height: 44px; box-sizing: border-box; }
+.farmer-create-locked { position: relative; }
+.farmer-create-locked input {
+  width: 100%;
+  padding-left: 38px;
+  border-color: #d6cdbd;
+  background: var(--ivory);
+  color: var(--cocoa-soft);
+  cursor: not-allowed;
+}
+.farmer-create-locked .farmer-overview-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  color: var(--cocoa-soft);
+  pointer-events: none;
+}
 .farmer-create-notice { margin: 0 0 24px; border: 1px solid #efc591; border-radius: var(--radius); padding: 14px 16px; background: var(--cream); color: var(--cocoa); }
 .farmer-create-upload-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
 .farmer-create-file { display: grid; align-content: start; gap: 10px; min-width: 0; border: 1px dashed #b9cbb1; border-radius: var(--radius-lg); padding: 24px; background: #fbfdf9; }
