@@ -40,3 +40,8 @@ class GrantOut(BaseModel):
     granted_by: str
     granted_at: datetime
     revoked_at: datetime | None
+
+
+class DocumentListItem(DocumentOut):
+    can_manage: bool  # true khi ví là uploader: được cấp / thu hồi quyền
+    grants: list[GrantOut] = []  # chỉ có khi can_manage

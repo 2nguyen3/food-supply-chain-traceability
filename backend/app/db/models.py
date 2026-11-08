@@ -55,7 +55,7 @@ class Document(Base):
     __table_args__ = (
         CheckConstraint("visibility IN ('public', 'private')", name="ck_documents_visibility"),
         CheckConstraint(
-            "doc_type IN ('certificate', 'image', 'metadata', 'invoice', 'incident_report')",
+            "doc_type IN ('certificate', 'image', 'metadata', 'invoice', 'incident_report', 'recall_reason')",
             name="ck_documents_doc_type",
         ),
         Index("ix_documents_token_id", "token_id"),

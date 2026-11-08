@@ -228,3 +228,74 @@ def test_upload_rejections(api):
     assert err(upload(api, "farmerA", "certificate", PDF, 502)) == (502, "IPFS_UPLOAD_FAILED")
     with Session(api.engine) as s:  # upload IPFS lỗi thì không tạo bản ghi
         assert s.execute(text("SELECT count(*) FROM documents")).scalar() == 0
+
+
+# ---------------- liệt kê tài liệu riêng + loại tài liệu mới ----------------
+def _list(api, who, token_id=None):
+    path = "/documents" + (f"?token_id={token_id}" if token_id is not None else "")
+    return api.client.get(path, headers=api.headers[who] if who else {})
+
+
+def test_list_private_documents_by_role(api, invoice):
+    doc, _ = invoice
+    assert _list(api, "farmerA", 1).json() == []  # chưa bind = bản nháp, không liệt kê
+    assert bind(api, "farmerA", doc, tx=None).status_code == 200
+
+    mine = _list(api, "farmerA", 1)
+    assert mine.status_code == 200 and len(mine.json()) == 1
+    item = mine.json()[0]
+    assert item["id"] == doc["id"] and item["can_manage"] is True and item["doc_type"] == "invoice"
+    assert {g["wallet"] for g in item["grants"]} == {
+        api.people["logistics"].address.lower(), api.people["retailer"].address.lower()}
+    assert "wrapped_key" not in item and "aad" not in item
+
+    for who in ("logistics", "retailer"):  # người được cấp quyền: thấy tài liệu, không thấy danh sách grant
+        got = _list(api, who, 1).json()
+        assert [d["id"] for d in got] == [doc["id"]] and got[0]["can_manage"] is False and got[0]["grants"] == []
+
+    assert _list(api, "farmerB", 1).json() == []  # không phải uploader, không có grant
+    assert _list(api, "farmerA", 2).json() == []  # lọc theo lô khác
+    assert len(_list(api, "farmerA").json()) == 1  # không lọc: mọi lô của tôi
+
+
+def test_list_requires_login_role_and_valid_token_id(api, invoice):
+    assert _list(api, None).status_code == 401
+    assert err(_list(api, "admin")) == (403, "ACCESS_DENIED")  # Admin không có vai trò nghiệp vụ
+    assert err(_list(api, "stranger")) == (403, "ACCESS_DENIED")
+    assert err(_list(api, "farmerA", "abc")) == (422, "INVALID_REQUEST")
+    assert err(_list(api, "farmerA", "0")) == (422, "INVALID_REQUEST")
+
+
+def test_list_hides_revoked_grant_and_revoked_role(api, invoice):
+    doc, _ = invoice
+    bind(api, "farmerA", doc, tx=None)
+    path = f"/documents/{doc['id']}/grants/{api.people['logistics'].address}"
+    assert api.client.delete(path, headers=api.headers["farmerA"]).status_code == 204
+    assert _list(api, "logistics", 1).json() == []  # grant đã thu hồi
+    api.chain.take(api.people["retailer"].address, "RETAILER_ROLE")
+    assert err(_list(api, "retailer", 1)) == (403, "ACCESS_DENIED")  # mất vai trò on-chain
+    api.chain.down = True
+    assert err(_list(api, "farmerA", 1)) == (503, "CHAIN_UNAVAILABLE")  # RPC lỗi: không đoán quyền
+
+
+def test_incident_report_and_recall_reason_accept_pdf_or_json(api, lot):
+    assert upload(api, "retailer", "incident_report", PDF).json()["mime_type"] == "application/pdf"
+    assert upload(api, "retailer", "incident_report", b'{"note": "x"}').json()["mime_type"] == "application/json"
+    assert err(upload(api, "retailer", "incident_report", b"khong phai pdf hay json", 415)) == (415, "UNSUPPORTED_CONTENT")
+
+    reason = upload(api, "admin", "recall_reason", PDF).json()
+    assert reason["visibility"] == "public" and reason["mime_type"] == "application/pdf"
+    assert upload(api, "admin", "recall_reason", b'{"reason": "x"}').json()["mime_type"] == "application/json"
+    for who in ("farmerA", "retailer", "logistics", "stranger"):  # chỉ Admin upload lý do thu hồi
+        assert err(upload(api, who, "recall_reason", PDF, 403)) == (403, "ROLE_REQUIRED"), who
+
+
+def test_bind_recall_reason_needs_admin_and_existing_lot(api, lot):
+    reason = upload(api, "admin", "recall_reason", PDF).json()
+    assert bind(api, "admin", reason, token_id="9", tx=None).status_code == 422  # lô không tồn tại
+    assert bind(api, "admin", reason, tx=None).status_code == 200
+    assert bind(api, "admin", reason, tx=None).json()["status"] == "bound"  # bind lặp: cùng kết quả
+    other = upload(api, "admin", "recall_reason", b'{"reason": "y"}').json()
+    api.chain.take(api.people["admin"].address, "ADMIN_ROLE")  # mất quyền Admin trước khi bind
+    assert err(bind(api, "admin", other, tx=None)) == (403, "NOT_UPLOADER")
+    assert err(bind(api, "farmerA", reason, tx=None)) == (403, "NOT_UPLOADER")

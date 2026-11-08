@@ -24,6 +24,7 @@ ROLE_FOR_DOC_TYPE = {
     "metadata": "FARMER_ROLE",
     "invoice": "FARMER_ROLE",
     "incident_report": "RETAILER_ROLE",
+    "recall_reason": "ADMIN_ROLE",
 }
 # visibility suy ra từ doc_type, client không gửi
 PRIVATE_DOC_TYPES = frozenset({"invoice"})
@@ -82,10 +83,12 @@ def validate_content(doc_type: str, content: bytes) -> str:
         except MetadataInvalid as exc:
             raise UnsupportedContent(str(exc)) from None
         return "application/json"
-    try:  # incident_report
+    if content.startswith(PDF_MAGIC):  # incident_report, recall_reason: PDF hoặc JSON
+        return "application/pdf"
+    try:
         json.loads(content.decode("utf-8"))
     except (UnicodeDecodeError, ValueError):
-        raise UnsupportedContent("Cần JSON hợp lệ mã hóa UTF-8") from None
+        raise UnsupportedContent("Cần PDF hoặc JSON hợp lệ mã hóa UTF-8") from None
     return "application/json"
 
 

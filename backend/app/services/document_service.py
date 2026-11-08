@@ -7,13 +7,13 @@ import re
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.core import crypto
 from app.db.models import Document, DocumentGrant
 from app.services import auth_service, upload_rules
-from app.services.chain import ChainClient, ReceiptInvalid, ReceiptNotFound
+from app.services.chain import ADMIN_ROLE, ChainClient, ReceiptInvalid, ReceiptNotFound
 from app.services.ipfs import PinataClient
 
 SCHEMA_VERSION = 1
@@ -172,12 +172,17 @@ def _check_receipt(chain: ChainClient, doc: Document, tid: int, tx_hash: str) ->
 
 
 def _check_post_mint(chain: ChainClient, doc: Document, tid: int, from_block: int) -> None:
-    """invoice: uploader là Farmer đã tạo lô. incident_report: uploader là Retailer đang giữ lô."""
+    """invoice: uploader là Farmer đã tạo lô. incident_report: Retailer đang giữ lô. recall_reason: Admin."""
     if doc.doc_type == "invoice":
         creator = chain.get_batch_creator(tid, from_block)
         if creator is None:
             raise InvalidRequest("Lô không tồn tại")
         if creator != doc.uploader.lower():
+            raise NotUploader()
+    elif doc.doc_type == "recall_reason":  # uploader là Admin (kiểm lại), lô phải tồn tại
+        if chain.get_batch(tid) is None:
+            raise InvalidRequest("Lô không tồn tại")
+        if not chain.has_role(doc.uploader, ADMIN_ROLE):
             raise NotUploader()
     else:  # incident_report
         owner = chain.owner_of(tid)
@@ -261,3 +266,41 @@ def read_private_document(
     if upload_rules.sha256_of(plaintext) != bytes(doc.sha256):  # bản rõ phải khớp hash lúc upload
         raise crypto.CiphertextInvalid("Nội dung giải mã không khớp hash đã lưu")
     return doc, plaintext
+
+
+# ---------- liệt kê tài liệu riêng ----------
+def list_private_documents(
+    db: Session, chain: ChainClient, wallet: str, token_id: str | None
+) -> list[tuple[Document, list[DocumentGrant] | None]]:
+    """Tài liệu riêng đã gắn vào lô mà ví được phép đọc (là uploader hoặc có grant chưa thu hồi).
+
+    Trả (tài liệu, danh sách grant); danh sách grant chỉ có khi ví là uploader (người quản lý quyền),
+    người được cấp quyền nhận None. Cùng điều kiện đọc: phải đang giữ vai trò nghiệp vụ trên contract.
+    """
+    wallet = wallet.lower()
+    if token_id is not None and (not token_id.isdigit() or int(token_id) == 0):
+        raise InvalidRequest("token_id phải là số nguyên dương dạng chuỗi")
+    if not chain.has_business_role(wallet):
+        raise AccessDenied()
+
+    granted = select(DocumentGrant.document_id).where(
+        DocumentGrant.wallet == wallet, DocumentGrant.revoked_at.is_(None)
+    )
+    query = select(Document).where(
+        Document.visibility == "private",
+        Document.token_id.is_not(None),
+        (func.lower(Document.uploader) == wallet) | Document.id.in_(granted),
+    )
+    if token_id is not None:
+        query = query.where(Document.token_id == int(token_id))
+    docs = db.scalars(query.order_by(Document.created_at.desc())).all()
+
+    result: list[tuple[Document, list[DocumentGrant] | None]] = []
+    for doc in docs:
+        grants = None
+        if doc.uploader.lower() == wallet:
+            grants = list(db.scalars(
+                select(DocumentGrant).where(DocumentGrant.document_id == doc.id).order_by(DocumentGrant.granted_at)
+            ))
+        result.append((doc, grants))
+    return result

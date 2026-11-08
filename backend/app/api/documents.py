@@ -7,7 +7,9 @@ from app.api.deps import current_wallet, get_chain, get_ipfs
 from app.core.config import Settings, get_settings
 from app.db.models import Document
 from app.db.session import get_session
-from app.schemas.documents import BindRequest, BindResponse, DocumentOut, GrantOut, GrantRequest
+from app.schemas.documents import (
+    BindRequest, BindResponse, DocumentListItem, DocumentOut, GrantOut, GrantRequest,
+)
 from app.services import document_service, upload_rules
 from app.services.chain import ChainClient
 from app.services.ipfs import PinataClient
@@ -23,6 +25,27 @@ def _out(doc: Document) -> DocumentOut:
         uploader=doc.uploader, token_id=None if doc.token_id is None else str(int(doc.token_id)),
         created_at=doc.created_at,
     )
+
+
+@router.get("", response_model=list[DocumentListItem])
+def list_documents(
+    token_id: str | None = None,
+    wallet: str = Depends(current_wallet),
+    db: Session = Depends(get_session),
+    chain: ChainClient = Depends(get_chain),
+):
+    items = document_service.list_private_documents(db, chain, wallet, token_id)
+    return [
+        DocumentListItem(
+            **_out(doc).model_dump(), can_manage=grants is not None,
+            grants=[
+                GrantOut(document_id=g.document_id, wallet=g.wallet, granted_by=g.granted_by,
+                         granted_at=g.granted_at, revoked_at=g.revoked_at)
+                for g in (grants or [])
+            ],
+        )
+        for doc, grants in items
+    ]
 
 
 @router.post("", status_code=201, response_model=DocumentOut)
