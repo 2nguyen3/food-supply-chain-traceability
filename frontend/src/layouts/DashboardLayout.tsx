@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import type { Role } from '../domain/types'
 import { Logo, NetworkBadge, WalletChip } from '../components/common'
 import { DashboardIcon, type DashboardIconName } from '../components/common/DashboardIcon'
 import { Button, Select } from '../components/ui'
+import { useToast } from '../components/ui/toast'
 import { useSession } from '../app/session'
 import { setPreviewRole } from '../mocks/session'
 type NavItem = { to: string; label: string; icon: DashboardIconName }
@@ -41,6 +42,7 @@ const NAV: Record<Role, NavItem[]> = {
     { to: 'incidents/new', label: 'Báo cáo sự cố', icon: 'flag' },
   ],
 }
+
 export function Sidebar({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
   return (
     <aside className="sidebar">
@@ -69,9 +71,79 @@ export function Sidebar({ role, onNavigate }: { role: Role; onNavigate?: () => v
     </aside>
   )
 }
+
+type NotificationItem = { id: string; text: string; to: string }
+
+function NotificationBell({ items = [] }: { items?: readonly NotificationItem[] }) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function closeOnOutsideClick(event: PointerEvent) {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setOpen(false)
+        buttonRef.current?.focus()
+      }
+    }
+    document.addEventListener('pointerdown', closeOnOutsideClick)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [open])
+
+  return (
+    <div className="topbar-notifications" ref={containerRef}>
+      <button
+        ref={buttonRef}
+        type="button"
+        className="topbar-icon-button topbar-bell"
+        aria-label={`Thông báo (${items.length})`}
+        aria-expanded={open}
+        aria-controls={open ? 'topbar-notification-panel' : undefined}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <DashboardIcon name="bell" />
+        {items.length > 0 && <span className="topbar-badge">{items.length}</span>}
+      </button>
+      {open && (
+        <div className="topbar-notification-panel" id="topbar-notification-panel">
+          <p className="topbar-notification-title">Thông báo</p>
+          {items.length === 0 ? (
+            <p className="topbar-notification-empty">Không có thông báo mới.</p>
+          ) : (
+            <ul className="topbar-notification-list">
+              {items.map((item) => (
+                <li key={item.id}>
+                  <Link to={item.to} onClick={() => setOpen(false)}>{item.text}</Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Topbar({ role, onMenu }: { role: Role; onMenu: () => void }) {
   const { session, setProductionSession } = useSession()
+  const { showToast } = useToast()
+  const navigate = useNavigate()
   const activeRole = session?.wallet.roles.includes(role) ? role : null
+
+  function handleLogout() {
+    setProductionSession(null)
+    showToast('Đã đăng xuất', 'info')
+    navigate('/connect')
+  }
+
   return (
     <header className="topbar">
       <div className="topbar-leading">
@@ -98,15 +170,7 @@ export function Topbar({ role, onMenu }: { role: Role; onMenu: () => void }) {
       </div>
       <div className="topbar-right">
         <NetworkBadge chainId={session?.wallet.chainId} />
-        <button
-          type="button"
-          className="topbar-icon-button topbar-bell"
-          aria-label="Thông báo chưa khả dụng"
-          title="Thông báo chưa khả dụng"
-          disabled
-        >
-          <DashboardIcon name="bell" />
-        </button>
+        <NotificationBell />
         <button
           type="button"
           className="topbar-logout"
@@ -117,7 +181,7 @@ export function Topbar({ role, onMenu }: { role: Role; onMenu: () => void }) {
               : 'Phiên xem trước: đổi vai trò trong công cụ development'
           }
           disabled={session?.source !== 'chain'}
-          onClick={() => setProductionSession(null)}
+          onClick={handleLogout}
         >
           <DashboardIcon name="logout" />
           <span>Đăng xuất</span>
@@ -129,7 +193,6 @@ export function Topbar({ role, onMenu }: { role: Role; onMenu: () => void }) {
 export function DashboardLayout({ role }: { role: Role }) {
   const [drawer, setDrawer] = useState(false)
   const location = useLocation()
-  const { session } = useSession()
   useEffect(() => setDrawer(false), [location.pathname])
   useEffect(() => {
     if (!drawer) return
@@ -165,11 +228,6 @@ export function DashboardLayout({ role }: { role: Role }) {
       )}
       <Topbar role={role} onMenu={() => setDrawer(true)} />
       <main className="dashboard-main" id="main">
-        {session?.source === 'development-preview' && (
-          <p className="muted" role="note">
-            Dữ liệu mô phỏng · chỉ xem trước giao diện, không xác thực on-chain.
-          </p>
-        )}
         <Outlet />
       </main>
     </div>

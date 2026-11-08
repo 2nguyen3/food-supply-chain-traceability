@@ -1,0 +1,256 @@
+.connect-page {
+  background: var(--cream);
+  padding: 96px 16px 96px;
+}
+
+/* Header dùng chung của PublicLayout: ẩn nút Menu thừa ở desktop. */
+.public-header .menu-toggle {
+  display: none;
+}
+
+.connect-inner {
+  width: min(100%, 720px);
+  margin-inline: auto;
+}
+
+.connect-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 12px;
+  margin: 0 0 26px;
+  padding: 0;
+  list-style: none;
+}
+
+.connect-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #8b8b82;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.connect-step:not(:last-child)::after {
+  content: '';
+  width: 24px;
+  height: 1px;
+  margin-left: 4px;
+  background: var(--line);
+}
+
+.connect-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #dcdcd4;
+  color: #6b6b62;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.connect-step.active {
+  color: var(--forest-dark);
+}
+
+.connect-step.active .connect-step-number {
+  background: var(--forest);
+  color: var(--white);
+}
+
+.connect-card {
+  padding: 26px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--white);
+  box-shadow: 0 10px 30px rgba(70, 55, 33, 0.06);
+}
+
+.connect-card-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.connect-mascot {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 10px;
+}
+
+.connect-title {
+  margin: 0 0 8px;
+  font-size: clamp(1.65rem, 4vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.connect-description {
+  max-width: 100%;
+  margin: 0 auto 26px;
+  color: var(--cocoa-soft);
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.connect-primary-row {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.connect-primary {
+  width: min(100%, 268px);
+  min-height: 52px;
+  padding: 0 24px;
+  border-radius: 12px;
+  font-size: 17px;
+}
+
+.connect-error {
+  margin: 12px 0 0;
+  color: var(--danger);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.connect-section-title {
+  margin: 28px 0 12px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.connect-accounts {
+  display: grid;
+  gap: 12px;
+}
+
+.connect-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 74px;
+  padding: 14px 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+  color: var(--cocoa);
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.connect-account:hover {
+  border-color: var(--forest);
+  background: #fffdf8;
+}
+
+.connect-account svg {
+  flex-shrink: 0;
+  color: var(--cocoa-soft);
+}
+
+.connect-account-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.connect-account-label {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.connect-account-address {
+  overflow-wrap: anywhere;
+  color: var(--cocoa-soft);
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+
+.connect-network {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: #eef4e8;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.connect-network input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--forest);
+}
+
+.connect-public-link {
+  margin: 22px 0 0;
+  text-align: center;
+  font-size: 15px;
+}
+
+.connect-public-link a {
+  color: var(--forest-dark);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.connect-public-link a:hover {
+  color: var(--forest);
+}
+
+@media (max-width: 680px) {
+  .public-header .menu-toggle {
+    display: inline-flex;
+  }
+
+  .connect-page {
+    padding: 48px 16px 64px;
+  }
+
+  .connect-card {
+    padding: 20px;
+  }
+
+  .connect-stepper {
+    margin-bottom: 20px;
+  }
+
+  .connect-step {
+    font-size: 13px;
+  }
+
+  .connect-step:not(:last-child)::after {
+    display: none;
+  }
+
+  .connect-description {
+    font-size: 15px;
+  }
+
+  .connect-primary-row {
+    justify-content: stretch;
+  }
+
+  .connect-primary {
+    width: 100%;
+  }
+
+  .connect-account-label {
+    font-size: 16px;
+  }
+}

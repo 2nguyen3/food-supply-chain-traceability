@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge } from '../ui'
+import { useToast } from '../ui/toast'
 import type { Lifecycle, Wallet } from '../../domain/types'
 import { DashboardIcon } from './DashboardIcon'
 
@@ -13,6 +14,7 @@ export function Logo({ light = false, to = '/' }: { light?: boolean; to?: string
   )
 }
 export function WalletChip({ wallet, label }: { wallet: Wallet | null; label?: string }) {
+  const { showToast } = useToast()
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle')
   useEffect(() => {
     if (copyStatus === 'idle') return
@@ -39,11 +41,18 @@ export function WalletChip({ wallet, label }: { wallet: Wallet | null; label?: s
           const copy = navigator.clipboard?.writeText(wallet.address)
           if (!copy) {
             setCopyStatus('error')
+            showToast('Không thể sao chép địa chỉ ví trên trình duyệt này', 'error')
             return
           }
           copy.then(
-            () => setCopyStatus('copied'),
-            () => setCopyStatus('error'),
+            () => {
+              setCopyStatus('copied')
+              showToast('Đã sao chép địa chỉ ví', 'success')
+            },
+            () => {
+              setCopyStatus('error')
+              showToast('Không thể sao chép địa chỉ ví trên trình duyệt này', 'error')
+            },
           )
         }}
       >
@@ -59,6 +68,7 @@ export function WalletChip({ wallet, label }: { wallet: Wallet | null; label?: s
     </span>
   )
 }
+
 export function NetworkBadge({ chainId }: { chainId?: number }) {
   return (
     <span
