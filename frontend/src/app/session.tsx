@@ -15,7 +15,9 @@ import type { Session } from '../mocks/session'
 import { getPreviewSession } from '../mocks/session'
 import { tokens } from '../services/api'
 import { logoutApi } from '../services/authApi'
-import { disconnectWallet, subscribeWallet } from '../services/wallet'
+import { readRoles } from '../services/roles'
+import { clearStoredSession, readStoredSession, saveStoredSession } from '../services/sessionStore'
+import { currentAccount, disconnectWallet, readChainId, subscribeWallet } from '../services/wallet'
 
 /** Ví đã kết nối nhưng chưa ký đăng nhập: chưa phải phiên, không vào được khu vực quản lý. */
 export interface PendingWallet {
@@ -25,6 +27,8 @@ export interface PendingWallet {
 
 interface SessionContextValue {
   session: Session | null
+  /** Đang khôi phục phiên đã lưu sau khi tải lại trang: chưa biết có đăng nhập hay không. */
+  restoring: boolean
   pending: PendingWallet | null
   setPending: (pending: PendingWallet | null) => void
   /** Đặt phiên mới; truyền null để đăng xuất (thu hồi phiên ở backend và xóa token). */
@@ -33,6 +37,7 @@ interface SessionContextValue {
 
 const SessionContext = createContext<SessionContextValue>({
   session: null,
+  restoring: false,
   pending: null,
   setPending: () => {},
   setProductionSession: () => {},
@@ -43,6 +48,7 @@ const PRIVATE_AREA = /^\/(admin|farmer|logistics|retailer)(\/|$)/
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(() => getPreviewSession())
   const [pending, setPending] = useState<PendingWallet | null>(null)
+  const [restoring, setRestoring] = useState(() => readStoredSession() !== null)
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const { showToast } = useToast()
@@ -57,6 +63,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [session, pending, pathname])
 
   const endSession = useCallback(() => {
+    // đánh dấu hết phiên ngay để phản hồi 401 muộn của lần thu hồi không bị coi là hết hạn
+    sessionRef.current = null
+    clearStoredSession()
     // gọi thu hồi trước: request đọc token ngay khi được gọi, sau đó mới xóa
     void logoutApi().catch(() => {})
     tokens.clearToken()
@@ -71,11 +80,55 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setPending(null)
         if (usedWallet) void disconnectWallet()
       } else {
+        const token = tokens.getToken()
+        if (next.source === 'chain' && next.expiresAt && token)
+          saveStoredSession({ address: next.wallet.address, token, expiresAt: next.expiresAt })
         setSession(next)
       }
     },
     [endSession],
   )
+
+  // Tải lại trang (F5): khôi phục phiên đã lưu nếu ví vẫn đúng tài khoản; vai trò và mạng đọc lại từ chain và ví
+  useEffect(() => {
+    if (!restoring) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const stored = readStoredSession()
+        if (!stored) return
+        const account = await currentAccount()
+        if (!account || account.toLowerCase() !== stored.address.toLowerCase()) {
+          clearStoredSession()
+          return
+        }
+        const [chainId, roles] = await Promise.all([readChainId(), readRoles(stored.address)])
+        if (cancelled) return
+        tokens.setToken(stored.token)
+        setSession({ source: 'chain', wallet: { address: account, chainId, roles }, expiresAt: stored.expiresAt })
+      } catch {
+        clearStoredSession()
+      } finally {
+        if (!cancelled) setRestoring(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [restoring])
+
+  // Backend báo 401 (token hết hạn hoặc bị thu hồi, ví dụ máy chủ đã dựng lại): đăng nhập lại
+  useEffect(() => {
+    tokens.onUnauthorized = () => {
+      if (sessionRef.current?.source !== 'chain') return
+      endSession()
+      showToast('Phiên đăng nhập đã hết hạn hoặc bị thu hồi, vui lòng đăng nhập lại.', 'info')
+      if (PRIVATE_AREA.test(pathRef.current)) navigate('/connect')
+    }
+    return () => {
+      tokens.onUnauthorized = null
+    }
+  }, [endSession, navigate, showToast])
 
   // Đổi tài khoản hoặc đổi mạng trong ví
   useEffect(() => {
@@ -131,8 +184,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const value = useMemo(
-    () => ({ session, pending, setPending, setProductionSession }),
-    [session, pending, setProductionSession],
+    () => ({ session, restoring, pending, setPending, setProductionSession }),
+    [session, restoring, pending, setProductionSession],
   )
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
 }

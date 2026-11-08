@@ -2,9 +2,15 @@ import type { ApiError } from '../domain/types'
 export interface TokenProvider {
   getToken(): string | null
   clearToken(): void
+  /** Gọi khi backend trả 401: token không còn dùng được. */
+  handleUnauthorized?(): void
 }
 export class MemoryTokenProvider implements TokenProvider {
   private token: string | null = null
+  onUnauthorized: (() => void) | null = null
+  handleUnauthorized() {
+    this.onUnauthorized?.()
+  }
   getToken() {
     return this.token
   }
@@ -40,11 +46,13 @@ export class HttpClient {
     this.tokens = tokens
     this.fetcher = fetcher
   }
-  async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  /** Gửi yêu cầu và trả về Response thô (dùng cho tải tệp); lỗi và 401 xử lý như request(). */
+  async requestRaw(path: string, init: RequestInit = {}): Promise<Response> {
     const headers = new Headers(init.headers)
     const token = this.tokens.getToken()
     if (token) headers.set('Authorization', `Bearer ${token}`)
-    if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+    if (init.body && !(init.body instanceof FormData) && !headers.has('Content-Type'))
+      headers.set('Content-Type', 'application/json')
     if (!this.baseUrl)
       throw new HttpError('API_NOT_CONFIGURED', 'Chưa cấu hình địa chỉ API (VITE_API_BASE_URL).')
     let response: Response
@@ -61,7 +69,10 @@ export class HttpClient {
       } catch {
         details = undefined
       }
-      if (response.status === 401) this.tokens.clearToken()
+      if (response.status === 401) {
+        this.tokens.clearToken()
+        this.tokens.handleUnauthorized?.()
+      }
       // Backend trả lỗi dạng {"error": {"code", "message"}}
       const body = (details as { error?: { code?: string; message?: string } } | undefined)?.error
       throw new HttpError(
@@ -71,6 +82,10 @@ export class HttpClient {
         details,
       )
     }
+    return response
+  }
+  async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    const response = await this.requestRaw(path, init)
     if (response.status === 204) return undefined as T
     return response.json() as Promise<T>
   }

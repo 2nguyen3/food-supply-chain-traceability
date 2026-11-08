@@ -4,7 +4,7 @@ import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router
 import { PublicLayout } from '../layouts/PublicLayout'
 import { DashboardLayout } from '../layouts/DashboardLayout'
 import { SessionProvider, useSession } from './session'
-import { ErrorState } from '../components/ui'
+import { ErrorState, LoadingState } from '../components/ui'
 import { ToastProvider } from '../components/ui/toast'
 import { publicRoutes } from '../features/public/routes'
 import { authRoutes } from '../features/auth/routes'
@@ -41,8 +41,14 @@ function Root() {
   )
 }
 function Guard({ role }: { role: Role }) {
-  const { session } = useSession()
+  const { session, restoring } = useSession()
   const location = useLocation()
+  if (restoring)
+    return (
+      <div className="container home-note">
+        <LoadingState label="Đang khôi phục phiên đăng nhập…" />
+      </div>
+    )
   if (!session) return <Navigate to="/connect" state={{ from: location.pathname }} replace />
   if (session.wallet.chainId !== config.chainId) return <Navigate to="/auth/network" replace />
   if (!session.wallet.roles.includes(role))
