@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Logo } from '../components/common'
 import { useSession } from '../app/session'
-import { networkName } from '../config/env'
+import { config, networkName } from '../config/env'
 export function PublicLayout() {
   const [menu, setMenu] = useState(false)
   const location = useLocation()
   const { session } = useSession()
   useEffect(() => setMenu(false), [location.pathname])
-  const dashboard = session?.wallet.chainId === 11155111 ? session.wallet.roles[0] : undefined
+  const dashboard = session?.wallet.chainId === config.chainId ? session.wallet.roles[0] : undefined
   return (
     <div className="public-shell">
       <a className="skip-link" href="#main">

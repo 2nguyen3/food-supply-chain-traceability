@@ -175,12 +175,7 @@ export function Topbar({ role, onMenu }: { role: Role; onMenu: () => void }) {
           type="button"
           className="topbar-logout"
           aria-label="Đăng xuất"
-          title={
-            session?.source === 'chain'
-              ? 'Đăng xuất'
-              : 'Phiên xem trước: đổi vai trò trong công cụ development'
-          }
-          disabled={session?.source !== 'chain'}
+          title="Đăng xuất"
           onClick={handleLogout}
         >
           <DashboardIcon name="logout" />

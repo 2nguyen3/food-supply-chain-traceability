@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useSession } from '../../../app/session'
+import { config } from '../../../config/env'
 import { Button, Card, EmptyState, ErrorState, LoadingState, Modal, PageHeader } from '../../../components/ui'
 import type { TransferRequest } from '../../../domain/types'
 import { FarmerOverviewIcon } from '../components/FarmerOverviewIcon'
@@ -125,7 +126,7 @@ export function FarmerTransfersPage() {
   ]
   const selectedBatch = ownBatches.find((batch) => batch.code === selectedBatchCode)
   const roleReady = !!session?.wallet.roles.includes('farmer')
-  const networkReady = session?.wallet.chainId === 11155111
+  const networkReady = session?.wallet.chainId === config.chainId
   const canRequest = !!selectedBatch && preview && roleReady && networkReady && recipientSelected && !pending.some((transfer) => transfer.batchCode === selectedBatch.code)
   const batchPath = (code: string) => `/farmer/batches/${encodeURIComponent(code)}${preview ? `?previewFarm=${previewFarmId ?? 'none'}` : ''}`
 

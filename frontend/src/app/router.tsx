@@ -13,7 +13,7 @@ import { farmerRoutes } from '../features/farmer/routes'
 import { logisticsRoutes } from '../features/logistics/routes'
 import { retailerRoutes } from '../features/retailer/routes'
 import type { Role } from '../domain/types'
-import { validateProductionConfig } from '../config/env'
+import { config, validateProductionConfig } from '../config/env'
 function ScrollToTop() {
   const { pathname, hash } = useLocation()
   useLayoutEffect(() => {
@@ -24,8 +24,8 @@ function ScrollToTop() {
 function Root() {
   const missing = import.meta.env.PROD ? validateProductionConfig() : []
   return (
-    <SessionProvider>
-      <ToastProvider>
+    <ToastProvider>
+      <SessionProvider>
         {missing.length > 0 && (
           <div
             role="alert"
@@ -36,15 +36,15 @@ function Root() {
         )}
         <ScrollToTop />
         <Outlet />
-      </ToastProvider>
-    </SessionProvider>
+      </SessionProvider>
+    </ToastProvider>
   )
 }
 function Guard({ role }: { role: Role }) {
   const { session } = useSession()
   const location = useLocation()
   if (!session) return <Navigate to="/connect" state={{ from: location.pathname }} replace />
-  if (session.wallet.chainId !== 11155111) return <Navigate to="/auth/network" replace />
+  if (session.wallet.chainId !== config.chainId) return <Navigate to="/auth/network" replace />
   if (!session.wallet.roles.includes(role))
     return (
       <div className="container home-note">

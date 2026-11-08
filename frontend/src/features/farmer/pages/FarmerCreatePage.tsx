@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, ty
 import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { useSession } from '../../../app/session'
+import { config } from '../../../config/env'
 import { Button, Card, Input, Modal, PageHeader } from '../../../components/ui'
 import { BATCH_WEIGHT_KG } from '../../../domain/types'
 import { FarmerOverviewIcon } from '../components/FarmerOverviewIcon'
@@ -177,7 +178,7 @@ export function FarmerCreatePage() {
   const formValid = Object.keys(validateForm(form, duplicateCodes)).length === 0
   const filesValid = !!files.certificate?.sha256 && !!files.image?.sha256 && !!metadataHash
   const roleValid = !!session?.wallet.roles.includes('farmer')
-  const networkValid = session?.wallet.chainId === 11155111
+  const networkValid = session?.wallet.chainId === config.chainId
   const canSimulateMint = preview && !!farmId && roleValid && networkValid && formValid && filesValid && stage === 'idle'
   const progressIndex = stage === 'validating' ? 0 : stage === 'awaitingSignature' || stage === 'rejected' ? 1 : stage === 'broadcast' ? 2 : stage === 'pending' ? 3 : 4
 

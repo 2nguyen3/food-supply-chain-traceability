@@ -30,7 +30,12 @@ export class HttpClient {
   private baseUrl: string
   private tokens: TokenProvider
   private fetcher: typeof fetch
-  constructor(baseUrl: string, tokens: TokenProvider, fetcher: typeof fetch = fetch) {
+  // bọc fetch: trình duyệt báo "Illegal invocation" nếu fetch bị gọi với this là HttpClient
+  constructor(
+    baseUrl: string,
+    tokens: TokenProvider,
+    fetcher: typeof fetch = (input, init) => fetch(input, init),
+  ) {
     this.baseUrl = baseUrl
     this.tokens = tokens
     this.fetcher = fetcher
@@ -40,6 +45,8 @@ export class HttpClient {
     const token = this.tokens.getToken()
     if (token) headers.set('Authorization', `Bearer ${token}`)
     if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+    if (!this.baseUrl)
+      throw new HttpError('API_NOT_CONFIGURED', 'Chưa cấu hình địa chỉ API (VITE_API_BASE_URL).')
     let response: Response
     try {
       response = await this.fetcher(new URL(path, this.baseUrl), { ...init, headers })
@@ -55,9 +62,11 @@ export class HttpClient {
         details = undefined
       }
       if (response.status === 401) this.tokens.clearToken()
+      // Backend trả lỗi dạng {"error": {"code", "message"}}
+      const body = (details as { error?: { code?: string; message?: string } } | undefined)?.error
       throw new HttpError(
-        'HTTP_ERROR',
-        `API trả về lỗi ${response.status}.`,
+        body?.code ?? 'HTTP_ERROR',
+        body?.message ?? `API trả về lỗi ${response.status}.`,
         response.status,
         details,
       )

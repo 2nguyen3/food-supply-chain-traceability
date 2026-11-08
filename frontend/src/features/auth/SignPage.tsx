@@ -1,57 +1,47 @@
-import { useEffect, useState } from 'react'
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useSession } from '../../app/session'
 import { Button } from '../../components/ui'
 import { useToast } from '../../components/ui/toast'
-import type { Role } from '../../domain/types'
-import { getDemoWallet } from './demoWallets'
+import { config, networkName } from '../../config/env'
+import {
+  describeAuthError,
+  requestChallenge,
+  verifyLogin,
+  type Challenge,
+} from '../../services/authApi'
+import { HttpError } from '../../services/http'
+import { readRoles, RolesError } from '../../services/roles'
+import {
+  currentAccount,
+  disconnectWallet,
+  signLoginMessage,
+  toWalletError,
+} from '../../services/wallet'
+import { LOGIN_STEPS, ROLE_HOME } from './steps'
 import './styles/connect.css'
 import './styles/sign.css'
 
-const STEPS = ['Kết nối ví', 'Mạng Sepolia', 'Ký challenge', 'Đọc role']
+const STEPS = LOGIN_STEPS
 const ACTIVE_STEPS = 3
 
-const ROLE_LABELS: Record<Role, string> = {
-  admin: 'Admin',
-  farmer: 'Farmer',
-  logistics: 'Logistics',
-  retailer: 'Retailer',
-}
+type SignStage =
+  | 'idle'
+  | 'signing'
+  | 'verifying'
+  | 'reading'
+  | 'rejected'
+  | 'failed'
+  | 'rolesFailed'
+  | 'success'
 
-const ROLE_HOME: Record<Role, string> = {
-  admin: '/admin/overview',
-  farmer: '/farmer/overview',
-  logistics: '/logistics/overview',
-  retailer: '/retailer/overview',
-}
-
-type SignStage = 'idle' | 'rejected' | 'success'
+type ChallengeState =
+  | { status: 'loading' }
+  | { status: 'ready'; challenge: Challenge }
+  | { status: 'error'; message: string }
 
 function shortAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`
-}
-
-function pad(value: number): string {
-  return String(value).padStart(2, '0')
-}
-
-function formatDateTime(date: Date): string {
-  return `${pad(date.getHours())}:${pad(date.getMinutes())} ${pad(date.getDate())}/${pad(
-    date.getMonth() + 1,
-  )}/${date.getFullYear()}`
-}
-
-function makeChallenge() {
-  const issuedAt = new Date()
-  const bytes = crypto.getRandomValues(new Uint8Array(8))
-  return {
-    nonce: Array.from(bytes)
-      .map((byte) => byte.toString(16).padStart(2, '0'))
-      .join(''),
-    domain: window.location.host,
-    issuedAt,
-    expiresAt: new Date(issuedAt.getTime() + 20 * 60 * 1000),
-  }
 }
 
 function WalletIcon() {
@@ -140,51 +130,65 @@ function PenIcon() {
 }
 
 export function SignPage() {
-  const { session, setProductionSession } = useSession()
+  const { session, pending, setPending, setProductionSession } = useSession()
   const { showToast, clearToasts } = useToast()
   const navigate = useNavigate()
-  const [params] = useSearchParams()
-  const [challenge, setChallenge] = useState(makeChallenge)
+  const [challenge, setChallenge] = useState<ChallengeState>({ status: 'loading' })
+  const [attempt, setAttempt] = useState(0)
   const [copied, setCopied] = useState(false)
+  const [stage, setStage] = useState<SignStage>('idle')
+  const [failure, setFailure] = useState('')
+  const expiresAtRef = useRef(0)
 
-  const previewStage = import.meta.env.DEV ? params.get('state') : null
-  const [stage, setStage] = useState<SignStage>(
-    previewStage === 'rejected' ? 'rejected' : previewStage === 'success' ? 'success' : 'idle',
-  )
-  const [armed, setArmed] = useState(false)
-  const holdSuccess = import.meta.env.DEV && params.get('hold') === '1'
+  const address = pending?.address
+  const wrongChain = pending !== null && pending.chainId !== config.chainId
 
-  const demoKey = params.get('w')
-  const fallback = getDemoWallet(demoKey)
-  const wallet = session?.wallet ?? fallback
-  const role = wallet?.roles[0]
-
+  // Lấy thông điệp từ backend cho đúng ví đang kết nối (đổi ví hoặc thử lại thì lấy lại)
   useEffect(() => {
-    if (stage !== 'success' || holdSuccess) return
+    if (!address || wrongChain) return
+    const controller = new AbortController()
+    setChallenge({ status: 'loading' })
+    requestChallenge(address, controller.signal)
+      .then((data) => {
+        if (data.chain_id !== config.chainId)
+          setChallenge({
+            status: 'error',
+            message: `Máy chủ đang dùng chainId ${data.chain_id} nhưng giao diện cấu hình chainId ${config.chainId}.`,
+          })
+        else setChallenge({ status: 'ready', challenge: data })
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return
+        setChallenge({ status: 'error', message: describeAuthError(error) })
+      })
+    return () => controller.abort()
+  }, [address, wrongChain, attempt])
+
+  // Ký xong và đã đọc vai trò thì chuyển trang
+  useEffect(() => {
+    if (stage !== 'success') return
+    const role = session?.wallet.roles[0]
     const timer = window.setTimeout(() => {
       navigate(role ? ROLE_HOME[role] : '/auth/no-access', { replace: true })
-    }, 1800)
+    }, 1200)
     return () => window.clearTimeout(timer)
-  }, [stage, holdSuccess, role, navigate])
+  }, [stage, session, navigate])
 
-  if (!wallet) return <Navigate to="/connect" replace />
+  if (session && stage !== 'success') {
+    const role = session.wallet.roles[0]
+    return <Navigate to={role ? ROLE_HOME[role] : '/auth/no-access'} replace />
+  }
+  if (!pending && stage !== 'success') return <Navigate to="/connect" replace />
+  if (wrongChain) return <Navigate to="/auth/network" replace />
 
-  const activeWallet = wallet
-  const roleLabel = role ? ROLE_LABELS[role] : 'Ví chưa cấp quyền'
-  const message = [
-    'COCOMARK đăng nhập',
-    'Mục đích: xác thực phiên',
-    `Domain: ${challenge.domain}`,
-    `Địa chỉ: ${activeWallet.address}`,
-    `ChainId: ${activeWallet.chainId}`,
-    `Nonce: ${challenge.nonce}`,
-    `IssuedAt: ${formatDateTime(challenge.issuedAt)}`,
-    `ExpirationTime: ${formatDateTime(challenge.expiresAt)}`,
-  ]
+  const walletAddress = pending?.address ?? session?.wallet.address ?? ''
+  const busy = stage === 'signing' || stage === 'verifying' || stage === 'reading'
+  const ready = challenge.status === 'ready'
+  const lines = ready ? challenge.challenge.message.split('\n') : []
 
   async function copyAddress() {
     try {
-      await navigator.clipboard.writeText(activeWallet.address)
+      await navigator.clipboard.writeText(walletAddress)
       setCopied(true)
       showToast('Đã sao chép địa chỉ ví', 'success')
     } catch {
@@ -192,41 +196,71 @@ export function SignPage() {
     }
   }
 
-  function completeSign() {
-    setProductionSession({
-      source: session?.source ?? (fallback ? 'development-preview' : 'chain'),
-      wallet: activeWallet,
-    })
-    setStage('success')
+  /** Sau khi backend xác thực: đọc vai trò từ hợp đồng rồi mở phiên. */
+  async function finishLogin() {
+    if (!pending) return
+    setStage('reading')
+    try {
+      const roles = await readRoles(pending.address)
+      setProductionSession({
+        source: 'chain',
+        wallet: { address: pending.address, chainId: pending.chainId, roles },
+        expiresAt: expiresAtRef.current,
+      })
+      setPending(null)
+      setStage('success')
+    } catch (error) {
+      setFailure(error instanceof RolesError ? error.message : 'Không đọc được vai trò.')
+      setStage('rolesFailed')
+    }
   }
 
-  function handleSign() {
-    if (stage === 'success') return
-    if (armed) {
-      clearToasts()
-      setStage('rejected')
+  async function handleSign() {
+    if (!ready || !pending || busy || stage === 'success') return
+    clearToasts()
+    setFailure('')
+    const { nonce, message } = challenge.challenge
+
+    // Tài khoản đang chọn trong ví phải đúng là ví đã kết nối
+    const active = await currentAccount()
+    if (active && active.toLowerCase() !== pending.address.toLowerCase()) {
+      setPending({ ...pending, address: active })
       return
     }
-    clearToasts()
-    completeSign()
+
+    setStage('signing')
+    let signature: string
+    try {
+      signature = await signLoginMessage(pending.address, message)
+    } catch (error) {
+      const wallet = toWalletError(error)
+      if (wallet.code === 'REJECTED') {
+        setStage('rejected')
+      } else {
+        setFailure(wallet.message)
+        setStage('failed')
+      }
+      return
+    }
+
+    setStage('verifying')
+    try {
+      const result = await verifyLogin(pending.address, nonce, signature)
+      expiresAtRef.current = result.expiresAt
+    } catch (error) {
+      setFailure(describeAuthError(error))
+      setStage('failed')
+      // nonce chỉ dùng một lần và hết hạn sau 5 phút: lấy thông điệp mới
+      if (error instanceof HttpError && error.code === 'NONCE_INVALID') setAttempt((n) => n + 1)
+      return
+    }
+    await finishLogin()
   }
 
-  function handleReject() {
-    clearToasts()
-    setArmed(true)
-    showToast('Lần ký kế tiếp sẽ bị từ chối')
-  }
-
-  function handleRetry() {
-    clearToasts()
-    setArmed(false)
-    setChallenge(makeChallenge())
-    completeSign()
-  }
-
-  function handleSwitchWallet() {
-    setProductionSession(null)
-    showToast('Đã đăng xuất')
+  const stageNotice: Partial<Record<SignStage, string>> = {
+    signing: 'Hãy xác nhận chữ ký trong cửa sổ MetaMask.',
+    verifying: 'Đang xác thực chữ ký với máy chủ...',
+    reading: 'Đang đọc vai trò từ hợp đồng...',
   }
 
   return (
@@ -256,8 +290,8 @@ export function SignPage() {
           <div className="sign-meta">
             <div className="sign-wallet">
               <WalletIcon />
-              <strong>{roleLabel}</strong>
-              <span className="sign-address">{shortAddress(activeWallet.address)}</span>
+              <strong>Ví đã kết nối</strong>
+              <span className="sign-address">{shortAddress(walletAddress)}</span>
               <button
                 type="button"
                 className="sign-copy"
@@ -271,7 +305,7 @@ export function SignPage() {
 
             <div className="sign-network">
               <span className="sign-network-dot" aria-hidden="true" />
-              Sepolia testnet · {activeWallet.chainId}
+              {networkName} · {config.chainId}
             </div>
           </div>
 
@@ -281,10 +315,22 @@ export function SignPage() {
           </p>
 
           <div className="sign-message" aria-label="Nội dung thông điệp cần ký">
-            {message.map((line) => (
-              <div key={line}>{line}</div>
+            {challenge.status === 'loading' && <div>Đang lấy thông điệp từ máy chủ...</div>}
+            {challenge.status === 'error' && <div>{challenge.message}</div>}
+            {lines.map((line, index) => (
+              <div key={index}>{line || '\u00a0'}</div>
             ))}
           </div>
+
+          {challenge.status === 'error' && (
+            <div className="sign-result rejected" role="alert">
+              <span className="sign-result-icon">
+                <AlertIcon />
+              </span>
+              <strong>Chưa lấy được thông điệp đăng nhập</strong>
+              <p>{challenge.message}</p>
+            </div>
+          )}
 
           {stage === 'rejected' && (
             <div className="sign-result rejected" role="alert">
@@ -294,6 +340,24 @@ export function SignPage() {
               <strong>Bạn đã từ chối chữ ký</strong>
               <p>Không có phiên nào được tạo. Hãy thử lại khi sẵn sàng.</p>
             </div>
+          )}
+
+          {(stage === 'failed' || stage === 'rolesFailed') && (
+            <div className="sign-result rejected" role="alert">
+              <span className="sign-result-icon">
+                <AlertIcon />
+              </span>
+              <strong>
+                {stage === 'rolesFailed' ? 'Đã ký nhưng chưa đọc được vai trò' : 'Đăng nhập chưa thành công'}
+              </strong>
+              <p>{failure}</p>
+            </div>
+          )}
+
+          {busy && (
+            <p className="sign-description" role="status">
+              {stageNotice[stage]}
+            </p>
           )}
 
           {stage === 'success' && (
@@ -309,31 +373,33 @@ export function SignPage() {
           )}
 
           <div className="sign-actions">
-            {stage === 'rejected' ? (
-              <Button type="button" className="sign-primary" onClick={handleRetry}>
-                <PenIcon />
-                Ký lại
+            {challenge.status === 'error' ? (
+              <Button
+                type="button"
+                className="sign-primary"
+                onClick={() => setAttempt((n) => n + 1)}
+              >
+                Thử lại
+              </Button>
+            ) : stage === 'rolesFailed' ? (
+              <Button type="button" className="sign-primary" onClick={finishLogin}>
+                Đọc lại vai trò
               </Button>
             ) : (
               <Button
                 type="button"
                 className="sign-primary"
                 onClick={handleSign}
-                disabled={stage === 'success'}
+                disabled={!ready || busy || stage === 'success'}
               >
                 <PenIcon />
-                Ký thông điệp
+                {stage === 'rejected' || stage === 'failed' ? 'Ký lại' : 'Ký thông điệp'}
               </Button>
             )}
-            <Button
-              type="button"
-              variant="secondary"
-              className="sign-secondary"
-              onClick={handleReject}
-            >
-              Mô phỏng từ chối
-            </Button>
-            <Link className="sign-switch" to="/connect" onClick={handleSwitchWallet}>
+            <Link className="sign-switch" to="/connect" onClick={() => {
+                setPending(null)
+                void disconnectWallet()
+              }}>
               Đổi ví
             </Link>
           </div>

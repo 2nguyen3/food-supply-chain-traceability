@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Badge } from '../ui'
 import { useToast } from '../ui/toast'
 import type { Lifecycle, Wallet } from '../../domain/types'
+import { config, networkName } from '../../config/env'
 import { DashboardIcon } from './DashboardIcon'
 
 export function Logo({
@@ -92,11 +93,11 @@ export function WalletChip({ wallet, label }: { wallet: Wallet | null; label?: s
 export function NetworkBadge({ chainId }: { chainId?: number }) {
   return (
     <span
-      className={`network-badge ${chainId === 11155111 ? 'network-sepolia' : 'network-unknown'}`}
+      className={`network-badge ${chainId === config.chainId ? 'network-sepolia' : 'network-unknown'}`}
     >
       <span className="network-dot" aria-hidden="true" />
-      {chainId === 11155111
-        ? 'Sepolia testnet · 11155111'
+      {chainId === config.chainId
+        ? `${networkName} · ${config.chainId}`
         : chainId === undefined
           ? 'Chưa xác nhận mạng'
           : `Sai mạng · ${chainId}`}

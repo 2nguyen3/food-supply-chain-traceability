@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '../../components/ui'
 import { useSession } from '../../app/session'
+import { config } from '../../config/env'
 import type { Role } from '../../domain/types'
+import { connectWallet, getEthereum, toWalletError } from '../../services/wallet'
+import { LOGIN_STEPS, ROLE_HOME } from './steps'
 import './styles/connect.css'
-
-const SEPOLIA_CHAIN_ID = 11155111
 
 interface DemoAccount {
   key: string
@@ -53,15 +54,7 @@ const DEMO_ACCOUNTS: DemoAccount[] = [
   },
 ]
 
-const STEPS = ['Kết nối ví', 'Mạng Sepolia', 'Ký challenge', 'Đọc role']
-
-interface EthereumProvider {
-  request(args: { method: string; params?: unknown[] }): Promise<unknown>
-}
-
-function getEthereum(): EthereumProvider | undefined {
-  return (window as Window & { ethereum?: EthereumProvider }).ethereum
-}
+const STEPS = LOGIN_STEPS
 
 function shortAddress(address: string): string {
   return `${address.slice(0, 8)}...${address.slice(-4)}`
@@ -105,69 +98,37 @@ function ChevronRightIcon() {
 
 export function ConnectPage() {
   const navigate = useNavigate()
-  const { setProductionSession } = useSession()
+  const { setProductionSession, setPending } = useSession()
   const [connecting, setConnecting] = useState(false)
-  const [wrongNetwork, setWrongNetwork] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const isDev = import.meta.env.DEV
 
   async function handleMetaMask() {
     setError(null)
-    const ethereum = getEthereum()
-    if (!ethereum) {
-      setError(
-        'Chưa phát hiện MetaMask. Vui lòng cài extension MetaMask hoặc dùng tài khoản mô phỏng bên dưới.',
-      )
+    if (!getEthereum()) {
+      setError('Chưa phát hiện MetaMask. Hãy cài extension MetaMask rồi tải lại trang.')
       return
     }
-
     setConnecting(true)
     try {
-      const accounts = (await ethereum.request({ method: 'eth_requestAccounts' })) as string[]
-      const address = accounts?.[0]
-      if (!address) {
-        setError('MetaMask không trả về địa chỉ ví. Vui lòng thử lại.')
-        return
-      }
-
-      const chainHex = (await ethereum.request({ method: 'eth_chainId' })) as string
-      const chainId = Number.parseInt(chainHex, 16)
-
-      setProductionSession({
-        source: 'chain',
-        wallet: { address: address as `0x${string}`, chainId, roles: [] },
-      })
-
-      if (chainId !== SEPOLIA_CHAIN_ID) {
-        navigate('/auth/network')
-        return
-      }
-      navigate('/auth/sign')
+      const wallet = await connectWallet()
+      setPending(wallet)
+      navigate(wallet.chainId === config.chainId ? '/auth/sign' : '/auth/network')
     } catch (cause) {
-      const code = (cause as { code?: number }).code
-      setError(
-        code === 4001
-          ? 'Bạn đã từ chối yêu cầu kết nối trong MetaMask.'
-          : 'Không thể kết nối ví. Vui lòng kiểm tra MetaMask và thử lại.',
-      )
+      setError(toWalletError(cause).message)
     } finally {
       setConnecting(false)
     }
   }
 
+  // Chỉ có khi chạy dev: vào thẳng khu vực theo vai trò để xem giao diện, không ký, không gọi backend
   function handleDemoAccount(account: DemoAccount) {
     setError(null)
-    const chainId = wrongNetwork ? 1 : SEPOLIA_CHAIN_ID
     setProductionSession({
       source: 'development-preview',
-      wallet: { address: account.address, chainId, roles: account.roles },
+      wallet: { address: account.address, chainId: config.chainId, roles: account.roles },
     })
-
-    if (wrongNetwork) {
-      navigate(`/auth/network?w=${account.key}`)
-      return
-    }
-    navigate('/auth/sign')
+    navigate(account.roles[0] ? ROLE_HOME[account.roles[0]] : '/auth/no-access')
   }
 
   return (
@@ -227,7 +188,7 @@ export function ConnectPage() {
 
           {isDev && (
             <div className="connect-demo">
-              <h2 className="connect-section-title">Chọn tài khoản</h2>
+              <h2 className="connect-section-title">Xem giao diện theo vai trò (chỉ khi dev)</h2>
               <div className="connect-accounts">
                 {DEMO_ACCOUNTS.map((account) => (
                   <button
@@ -247,14 +208,6 @@ export function ConnectPage() {
                 ))}
               </div>
 
-              <label className="connect-network">
-                <input
-                  type="checkbox"
-                  checked={wrongNetwork}
-                  onChange={(event) => setWrongNetwork(event.target.checked)}
-                />
-                <span>Ví đang ở sai mạng</span>
-              </label>
             </div>
           )}
 
