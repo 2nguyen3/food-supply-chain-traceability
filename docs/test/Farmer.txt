@@ -1,0 +1,29 @@
+DỮ LIỆU MẪU - LUỒNG C. TẠO LÔ MỚI
+Đăng nhập bằng ví Farmer A, vào /farmer/create.
+Mã COCONUT-007 chưa tồn tại trên blockchain.
+
+BƯỚC 1: DỮ LIỆU LÔ
+  Mã lô (batchCode):          COCONUT-007
+  Farm ID:                    FARM-A (tự điền, không sửa)
+  Vị trí nông trại:           Bến Tre, Việt Nam
+  Nhóm thu hoạch:             NHOM-2026-11-A
+  Ngày thu hoạch:             01/11/2026
+  Hạn sử dụng:                31/05/2027
+  Giống dừa:                  Dừa xiêm xanh
+  Phân bón:                   Phân hữu cơ vi sinh, bón 2 đợt
+  Nhiệt độ tối thiểu (°C):    10
+  Nhiệt độ tối đa (°C):       15
+
+BƯỚC 2: TỆP CÔNG KHAI
+  Chứng chỉ (PDF):   backend\scripts\sample_data\certificate.pdf
+  Ảnh gốc lô (JPG):  frontend\public\images\home\coconut-cluster.jpg
+
+BƯỚC 3: HÓA ĐƠN RIÊNG (TÙY CHỌN)
+  Không chọn hóa đơn.
+
+KẾT QUẢ MONG ĐỢI SAU KHI TẠO
+  Khối lượng:          1.000 kg · 1 NFT
+  Trạng thái:          Created
+  Chủ sở hữu NFT:      ví Farmer A
+  farmId trong metadata:     FARM-A
+  quantityKg trong metadata: 1000
