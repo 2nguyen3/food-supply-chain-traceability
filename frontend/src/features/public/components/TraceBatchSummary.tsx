@@ -40,7 +40,7 @@ export function TraceBatchSummary({
       <div className="trace-summary-image">
         <img
           src={batch.imageUrl ?? '/images/home/coconut-cluster.jpg'}
-          alt={batch.imageUrl ? `Ảnh gốc của lô ${batch.code}` : 'Buồng dừa xanh dùng làm ảnh minh họa cho lô mẫu'}
+          alt={`Ảnh của lô ${batch.code}`}
           width="1024"
           height="1536"
         />
@@ -48,7 +48,7 @@ export function TraceBatchSummary({
         <div className="trace-summary-image-copy">
           <p>Lô dừa tươi · 1.000 kg · 1 NFT</p>
           <h1 id="trace-batch-code">{batch.code}</h1>
-          <span>{batch.imageUrl ? 'Ảnh gốc từ IPFS · SHA-256 khớp blockchain' : 'Ảnh minh họa · không phải ảnh gốc của lô'}</span>
+          {batch.imageUrl && <span>Ảnh gốc từ IPFS · SHA-256 khớp blockchain</span>}
         </div>
       </div>
 

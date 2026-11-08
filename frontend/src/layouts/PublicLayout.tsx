@@ -15,7 +15,7 @@ export function PublicLayout() {
       </a>
       <header className="public-header">
         <div className="container header-inner">
-          <Logo />
+          <Logo scrollTop />
           <nav className="public-nav" aria-label="Điều hướng chính">
             <NavLink
               className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}

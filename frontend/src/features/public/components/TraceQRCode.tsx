@@ -13,7 +13,7 @@ export function TraceQRCode({ code, path: livePath }: { code: string; path?: str
   async function copyUrl() {
     try {
       await navigator.clipboard.writeText(url)
-      setFeedback('Đã sao chép liên kết demo.')
+      setFeedback('Đã sao chép liên kết.')
     } catch {
       setFeedback('Không thể sao chép tự động. Bạn có thể chọn và sao chép URL bên dưới.')
     }
@@ -29,7 +29,7 @@ export function TraceQRCode({ code, path: livePath }: { code: string; path?: str
     link.href = canvas.toDataURL('image/png')
     link.download = `qr-demo-${code}.png`
     link.click()
-    setFeedback('Đã tải ảnh QR của URL demo.')
+    setFeedback('Đã tải ảnh QR.')
   }
 
   return (
@@ -65,15 +65,10 @@ export function TraceQRCode({ code, path: livePath }: { code: string; path?: str
             Thông tin kỹ thuật <TraceIcon name="down" />
           </summary>
           <div>
-            <p>URL được mã hóa trong QR (bản demo)</p>
+            <p>URL được mã hóa trong QR</p>
             <p className="trace-qr-url mono">{url}</p>
-            <p>URL chuẩn khi triển khai chính thức</p>
-            <p className="trace-qr-url mono">
-              /trace/11155111/{'{contractAddress}'}/{'{tokenId}'}
-            </p>
             <p className="trace-qr-warning">
-              QR chỉ chứa địa chỉ công khai, không chứa khóa riêng, hóa đơn hay trạng thái. URL demo
-              không phải URL của hợp đồng đã triển khai.
+              QR chỉ chứa địa chỉ công khai, không chứa khóa riêng, hóa đơn hay trạng thái.
             </p>
           </div>
         </details>

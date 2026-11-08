@@ -5,10 +5,30 @@ import { useToast } from '../ui/toast'
 import type { Lifecycle, Wallet } from '../../domain/types'
 import { DashboardIcon } from './DashboardIcon'
 
-export function Logo({ light = false, to = '/' }: { light?: boolean; to?: string }) {
+export function Logo({
+  light = false,
+  to = '/',
+  scrollTop = false,
+}: {
+  light?: boolean
+  to?: string
+  scrollTop?: boolean
+}) {
   return (
-    <Link className={`logo ${light ? 'light' : ''}`} to={to} aria-label="COCOMARK, về trang chủ">
-      <img src="/brand/Primary.svg" width="36" height="36" alt="" />
+    <Link
+      className={`logo ${light ? 'light' : ''}`}
+      to={to}
+      aria-label={scrollTop ? 'COCOMARK, lên đầu trang' : 'COCOMARK, về trang chủ'}
+      onClick={
+        scrollTop
+          ? (event) => {
+              event.preventDefault()
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }
+          : undefined
+      }
+    >
+      <img src={light ? '/brand/Reverse.svg' : '/brand/Primary.svg'} width="36" height="36" alt="" />
       COCOMARK
     </Link>
   )

@@ -83,7 +83,7 @@ export function HomePage() {
               </div>
             </form>
             <div className="home-examples">
-              <span>Thử với dữ liệu mô phỏng:</span>
+              <span>Thử với lô mẫu:</span>
               {examples.map((code) => (
                 <Link key={code} to={`/trace/demo/${code}`}>
                   {code}
@@ -96,7 +96,6 @@ export function HomePage() {
             </Link>
           </div>
         </div>
-        <span className="home-hero-image-note">Ảnh minh họa</span>
       </section>
 
       <section className="home-section home-journey container" aria-labelledby="home-journey-title">
@@ -159,7 +158,6 @@ export function HomePage() {
                 Trạng thái Hết hạn và Đã thu hồi hiển thị riêng
               </li>
             </ul>
-            <p className="home-story-image-note">Ảnh minh họa, không phải ảnh của một lô cụ thể.</p>
           </div>
         </div>
       </section>
@@ -179,9 +177,6 @@ export function HomePage() {
           <Link className="home-document-link" to="/trace/demo/COCONUT-001">
             Xem lô mẫu <HomeIcon name="arrow" size={18} />
           </Link>
-          <p className="home-demo-note">
-            Lô mẫu sử dụng dữ liệu mô phỏng, chưa xác nhận trên Sepolia.
-          </p>
         </div>
         <div className="home-certificate" aria-label="Minh họa cấu trúc hồ sơ công khai">
           <div className="home-certificate-top">
@@ -190,7 +185,7 @@ export function HomePage() {
             </span>
             <div>
               <strong>Hồ sơ công khai của lô</strong>
-              <span>Minh họa giao diện, chưa có tệp thật</span>
+              <span>Chứng chỉ, ảnh và metadata của lô</span>
             </div>
           </div>
           <div className="home-certificate-files">

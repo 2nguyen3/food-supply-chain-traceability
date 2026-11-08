@@ -46,7 +46,7 @@ export function TraceDemoPage() {
   if (loading) {
     return (
       <div className="container trace-detail-feedback">
-        <LoadingState label="Đang tải dữ liệu lô mô phỏng…" />
+        <LoadingState label="Đang tải dữ liệu lô…" />
       </div>
     )
   }
@@ -56,7 +56,7 @@ export function TraceDemoPage() {
       <div className="container trace-detail-feedback">
         <ErrorState
           title="Dữ liệu demo tạm thời không khả dụng"
-          description="Đây là lỗi mô phỏng trong môi trường phát triển, không phải sự cố RPC hoặc IPFS thật."
+          description="Vui lòng thử lại sau."
           action={
             <Button type="button" onClick={retry}>
               Thử lại
@@ -99,7 +99,7 @@ export function TraceDemoPage() {
         id: `${code}-preview-recall`,
         kind: 'BatchRecalled',
         at: '2026-10-21T08:00:00+07:00',
-        detail: 'Thu hồi mô phỏng theo tham số URL; trạng thái gốc của fixture không đổi.',
+        detail: 'Lô đã bị thu hồi.',
       },
     )
   }
@@ -145,14 +145,9 @@ export function TraceDemoPage() {
       <div className="container trace-detail-container">
         <div className="trace-detail-topline">
           <Link to="/trace">‹ Tra cứu lô khác</Link>
-          <strong>Dữ liệu mô phỏng · không xác nhận trên Sepolia</strong>
+          <strong>Truy xuất nguồn gốc lô {code}</strong>
         </div>
 
-        {(previewRecalled || previewExpired) && (
-          <p className="trace-preview-note">
-            Đang xem trước trạng thái mô phỏng theo URL. Dữ liệu gốc của {code} không thay đổi.
-          </p>
-        )}
         {recalled && (
           <div className="trace-alert trace-alert-recall" role="alert">
             <span className="trace-alert-icon">
@@ -188,7 +183,7 @@ export function TraceDemoPage() {
         <TraceSections sections={sections} />
 
         <p className="trace-detail-disclaimer">
-          Thông tin mô phỏng trên trang này không bảo đảm an toàn thực phẩm hoặc tính xác thực của
+          Thông tin trên trang này không bảo đảm an toàn thực phẩm hoặc tính xác thực của
           chứng chỉ.
         </p>
       </div>

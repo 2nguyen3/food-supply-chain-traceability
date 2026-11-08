@@ -37,7 +37,7 @@ export function TraceJourneyPanel({ events, live = false }: { events: DemoEvent[
               <h3>{EVENT_META[event.kind].label}</h3>
               <p>{event.detail}</p>
               <small>
-                {formatDateTime(event.at)} · {live ? 'Thời gian block' : 'Thời gian mô phỏng'}
+                {formatDateTime(event.at)} · {live ? 'Thời gian block' : 'Thời gian'}
                 {event.transactionHash ? (
                   <span className="mono"> · {event.transactionHash}</span>
                 ) : null}
@@ -89,7 +89,7 @@ function TemperatureChart({ batch }: { batch: DemoBatch }) {
       <svg
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label={`Biểu đồ nhiệt độ mô phỏng theo thời gian: ${readings.map((reading) => `${reading.temperatureC} độ C`).join(', ')}`}
+        aria-label={`Biểu đồ nhiệt độ theo thời gian: ${readings.map((reading) => `${reading.temperatureC} độ C`).join(', ')}`}
       >
         {batch.minTemperatureC !== undefined && batch.maxTemperatureC !== undefined && (
           <rect
@@ -154,10 +154,6 @@ function TemperatureChart({ batch }: { batch: DemoBatch }) {
           )
         })}
       </svg>
-      <figcaption>
-        Dữ liệu nhiệt độ và thời điểm quan sát là fixture mô phỏng, không phải đo từ thiết bị IoT
-        thật. Vùng xanh là ngưỡng minh họa trong fixture.
-      </figcaption>
     </figure>
   )
 }
@@ -182,7 +178,7 @@ export function TraceTemperaturePanel({ batch }: { batch: DemoBatch }) {
             {exceeded.map((reading) => `${reading.temperatureC}°C`).join(', ')}
           </strong>
           <p>
-            Đây là lần vượt ngưỡng trong dữ liệu mẫu; không tự động chứng minh lô mất an toàn thực
+            Đây là lần vượt ngưỡng trong dữ liệu; không tự động chứng minh lô mất an toàn thực
             phẩm.
           </p>
         </div>
@@ -256,7 +252,7 @@ export function TraceNFTPanel({ ownership, live = false }: { ownership: DemoOwne
             <TraceIcon name="arrow" className="trace-ownership-arrow" />
             <strong>{actorLabel(entry.to)}</strong>
             <div className="trace-ownership-meta">
-              <span>{formatDateTime(entry.at)}{live ? '' : ' · Mô phỏng'}</span>
+              <span>{formatDateTime(entry.at)}</span>
               <span className="mono">
                 {entry.transactionHash ?? 'Chưa có txHash'}
               </span>
@@ -321,7 +317,7 @@ export function TraceDocumentsPanel({ batch }: { batch: DemoBatch }) {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                {batch.source === 'chain' ? 'Mở tệp gốc' : 'Mở tệp demo'}
+                {batch.source === 'chain' ? 'Mở tệp gốc' : 'Mở tệp'}
               </a>
             ) : (
               <p className="trace-document-empty">Chưa có tệp để xem</p>
@@ -357,7 +353,7 @@ function TechnicalField({
 export function TraceTechnicalPanel({ batch }: { batch: DemoBatch }) {
   const threshold =
     batch.minTemperatureC !== undefined && batch.maxTemperatureC !== undefined
-      ? `${batch.minTemperatureC}–${batch.maxTemperatureC}°C${batch.source === 'chain' ? '' : ' (mẫu)'}`
+      ? `${batch.minTemperatureC}–${batch.maxTemperatureC}°C`
       : undefined
   return (
     <div className="trace-technical-panel">

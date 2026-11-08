@@ -1,4 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
+import { useLayoutEffect } from 'react'
 import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { PublicLayout } from '../layouts/PublicLayout'
 import { DashboardLayout } from '../layouts/DashboardLayout'
@@ -13,6 +14,13 @@ import { logisticsRoutes } from '../features/logistics/routes'
 import { retailerRoutes } from '../features/retailer/routes'
 import type { Role } from '../domain/types'
 import { validateProductionConfig } from '../config/env'
+function ScrollToTop() {
+  const { pathname, hash } = useLocation()
+  useLayoutEffect(() => {
+    if (!hash) window.scrollTo(0, 0)
+  }, [pathname, hash])
+  return null
+}
 function Root() {
   const missing = import.meta.env.PROD ? validateProductionConfig() : []
   return (
@@ -26,6 +34,7 @@ function Root() {
             Thiếu cấu hình triển khai: {missing.join(', ')}
           </div>
         )}
+        <ScrollToTop />
         <Outlet />
       </ToastProvider>
     </SessionProvider>

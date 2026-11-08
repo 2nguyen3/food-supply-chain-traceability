@@ -108,7 +108,7 @@ export function TraceSearchPage() {
         </form>
 
         <div className="trace-search-examples" aria-label="Mã lô ví dụ">
-          <span>Ví dụ, dữ liệu mô phỏng:</span>
+          <span>Ví dụ:</span>
           {TRACE_DEMO_CODES.map((code) => (
             <Link key={code} to={`/trace/demo/${code}`}>
               {code}
@@ -123,19 +123,19 @@ export function TraceSearchPage() {
               description="Nhập mã lô hoặc mở một lô mẫu bên trên để xem trang truy xuất."
             />
           )}
-          {status === 'loading' && <LoadingState label="Đang tra cứu dữ liệu mô phỏng…" />}
+          {status === 'loading' && <LoadingState label="Đang tra cứu…" />}
           {status === 'not-found' && (
             <div className="trace-search-not-found">
               <ErrorState
                 title={`Không tìm thấy lô “${query}”`}
-                description="Kiểm tra lại mã trên bao bì. Bản xem trước hiện chỉ có bốn mã mẫu COCONUT-001 đến COCONUT-004; dữ liệu Sepolia chưa được tích hợp."
+                description="Kiểm tra lại mã trên bao bì hoặc mã QR."
               />
             </div>
           )}
           {status === 'unavailable' && (
             <ErrorState
-              title="Dữ liệu mô phỏng tạm thời không khả dụng"
-              description="Đây là trạng thái lỗi để kiểm tra giao diện trong môi trường phát triển, không phải sự cố RPC hay IPFS thật."
+              title="Dữ liệu tạm thời không khả dụng"
+              description="Vui lòng thử lại sau."
               action={
                 <Button type="button" onClick={retry}>
                   Thử lại
@@ -152,16 +152,8 @@ export function TraceSearchPage() {
           <div>
             <h2>QR hoạt động thế nào?</h2>
             <p>
-              QR chỉ chứa một địa chỉ web công khai, không chứa khóa, hóa đơn hay trạng thái. Khi có
-              tích hợp thật, trạng thái sẽ được đọc tại thời điểm mở trang.
-            </p>
-            <p>
-              Trong bản xem trước, URL dữ liệu mô phỏng có dạng <code>/trace/demo/COCONUT-001</code>
-              . URL triển khai blockchain sẽ có dạng{' '}
-              <code>
-                /trace/{'{chainId}'}/{'{contractAddress}'}/{'{tokenId}'}
-              </code>
-              .
+              QR chỉ chứa một địa chỉ web công khai, không chứa khóa, hóa đơn hay trạng thái. Trạng
+              thái lô được đọc tại thời điểm mở trang.
             </p>
           </div>
         </Card>
