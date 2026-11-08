@@ -248,17 +248,14 @@ export function TraceBlockchainPage() {
                 <Link className="button secondary" to="/trace">
                   Quay lại tra cứu
                 </Link>
-                <Link className="trace-blockchain-demo-link" to="/trace">
-                  Xem lô mẫu tại trang tra cứu
-                </Link>
               </div>
             </div>
           ) : null}
         </Card>
 
         <p className="trace-blockchain-footnote">
-          Trang này không dùng fixture demo. Chưa có bản ghi lô, NFT, hồ sơ IPFS hoặc kết quả
-          SHA-256 nào được xác nhận từ hợp đồng COCOMARK.
+          Chưa xác nhận được bản ghi lô, NFT, hồ sơ IPFS hoặc kết quả SHA-256 nào từ hợp đồng
+          COCOMARK.
         </p>
       </div>
     </div>

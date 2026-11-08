@@ -146,14 +146,36 @@ async function fetchIpfsBytes(cid: string, signal: AbortSignal): Promise<Uint8Ar
 const cidOf = (uri: unknown): string | undefined =>
   typeof uri === 'string' && uri.startsWith('ipfs://') ? uri.slice('ipfs://'.length) : undefined
 
-function isoDate(seconds: bigint): string {
-  return new Date(Number(seconds) * 1000).toISOString().slice(0, 10)
-}
 
 type Args = Record<string, unknown>
 const argsOf = (log: Log | EventLog): Args => {
   const named = log as EventLog
   return (named.args ? Object.fromEntries(named.fragment.inputs.map((input, i) => [input.name, named.args[i]])) : {}) as Args
+}
+
+/** Block đầu tiên có timestamp >= mốc (tìm nhị phân); lỗi RPC thì quét từ block deploy cho an toàn. */
+async function firstBlockAtOrAfter(
+  provider: JsonRpcProvider,
+  seconds: number,
+  floor: number,
+  latest: number,
+  signal: AbortSignal,
+): Promise<number> {
+  try {
+    let lo = floor
+    let hi = latest
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi) / 2)
+      const block = await withDeadline(provider.getBlock(mid), signal)
+      if (!block) return floor
+      if (block.timestamp >= seconds) hi = mid
+      else lo = mid + 1
+    }
+    return lo
+  } catch (error) {
+    if (signal.aborted) throw error
+    return floor
+  }
 }
 
 async function readBatchFromChain(
@@ -180,9 +202,30 @@ async function readBatchFromChain(
     signal,
   )
 
-  const from = config.deployBlock
-  const logs = async (name: string, ...filterArgs: unknown[]) =>
-    (await contract.queryFilter(contract.filters[name](...filterArgs), from, 'latest')) as (EventLog | Log)[]
+  // Mọi sự kiện của lô xảy ra sau thời điểm thu hoạch (hợp đồng chặn harvestDate > block.timestamp),
+  // nên chỉ cần quét từ block đầu tiên có timestamp >= harvestDate thay vì từ lúc deploy.
+  const latest = await withDeadline(provider.getBlockNumber(), signal)
+  const from = await firstBlockAtOrAfter(provider, Number(onChain.harvestDate), config.deployBlock, latest, signal)
+  // RPC miễn phí thường giới hạn khoảng block của eth_getLogs: thử cả khoảng một lần,
+  // bị từ chối thì chia đôi và nhớ độ dài đã chạy được cho các truy vấn còn lại.
+  let span = Number.MAX_SAFE_INTEGER
+  const logs = async (name: string, ...filterArgs: unknown[]) => {
+    const filter = contract.filters[name](...filterArgs)
+    const found: (EventLog | Log)[] = []
+    let start = from
+    while (start <= latest) {
+      const end = Math.min(start + span - 1, latest)
+      try {
+        found.push(...((await contract.queryFilter(filter, start, end)) as (EventLog | Log)[]))
+        start = end + 1
+      } catch (error) {
+        if (signal.aborted) throw error
+        if (end - start < 10) throw error
+        span = Math.max(10, Math.floor((end - start + 1) / 2))
+      }
+    }
+    return found
+  }
   const [created, accepted, transit, sold, incidents, recalledLogs, transfers] = await withDeadline(
     Promise.all([
       logs('BatchCreated', tokenId),
@@ -194,7 +237,7 @@ async function readBatchFromChain(
       logs('Transfer', null, null, tokenId),
     ]),
     signal,
-    20000,
+    45000,
   )
 
   const blockTimes = new Map<number, string>()
@@ -208,6 +251,7 @@ async function readBatchFromChain(
 
   // Nhãn vai trò hiện tại của từng địa chỉ (đọc từ contract); không có vai trò thì chỉ hiện địa chỉ rút gọn
   const labels = new Map<string, string>()
+  const wallets: Record<string, string> = {}
   const label = async (address: string): Promise<string> => {
     if (address === ZeroAddress) return 'zero-address'
     if (!labels.has(address)) {
@@ -219,18 +263,25 @@ async function readBatchFromChain(
         }
       }
       labels.set(address, `${role}${shortAddress(address)}`)
+      wallets[labels.get(address)!] = address
     }
     return labels.get(address)!
   }
 
   const events: DemoEvent[] = []
-  const push = async (log: Log, kind: DemoEvent['kind'], detail: string) =>
+  const push = async (
+    log: Log,
+    kind: DemoEvent['kind'],
+    detail: string,
+    attachment?: DemoEvent['attachment'],
+  ) =>
     events.push({
       id: `${log.transactionHash}-${log.index}`,
       kind,
       at: await timeOf(log),
       detail,
       transactionHash: log.transactionHash,
+      attachment,
     })
   for (const log of created) {
     const a = argsOf(log)
@@ -249,10 +300,21 @@ async function readBatchFromChain(
     await push(log, 'TransitRecorded', `${Number(a.tempCenti) / 100}°C tại ${a.location}.`)
   }
   for (const log of sold) await push(log, 'BatchSold', `Retailer ${shortAddress(String(argsOf(log).retailer))} đã bán lô.`)
-  for (const log of incidents) await push(log, 'IncidentReported', `Báo cáo sự cố (CID ${argsOf(log).reportCID}).`)
+  for (const log of incidents) {
+    const a = argsOf(log)
+    const cid = cidOf(a.reportCID) ?? String(a.reportCID)
+    await push(log, 'IncidentReported', `Retailer báo cáo sự cố #${a.incidentId}.`, {
+      label: 'Xem báo cáo sự cố',
+      url: ipfsFileUrl(cid),
+    })
+  }
   for (const log of recalledLogs) {
     const a = argsOf(log)
-    await push(log, 'BatchRecalled', `Admin thu hồi lô theo sự cố #${a.incidentId} (CID lý do ${a.reasonCID}).`)
+    const cid = cidOf(a.reasonCID) ?? String(a.reasonCID)
+    await push(log, 'BatchRecalled', `Admin thu hồi lô theo sự cố #${a.incidentId}.`, {
+      label: 'Xem lý do thu hồi',
+      url: ipfsFileUrl(cid),
+    })
   }
 
   const ownership: DemoOwnership[] = []
@@ -277,6 +339,7 @@ async function readBatchFromChain(
       observedAt: new Date(Number(a.observedAt) * 1000).toISOString(),
       location: String(a.location),
       transactionHash: log.transactionHash,
+      blockTime: await timeOf(log),
     })
   }
   readings.sort((x, y) => Date.parse(x.observedAt) - Date.parse(y.observedAt))
@@ -337,7 +400,7 @@ async function readBatchFromChain(
     farmLocation: onChain.farmLocation,
     variety: text('cultivar'),
     fertilizer: text('fertilizer'),
-    harvestDate: isoDate(onChain.harvestDate),
+    harvestDate: new Date(Number(onChain.harvestDate) * 1000).toISOString(),
     expiryDate: new Date(Number(onChain.expiryDate) * 1000).toISOString(),
     contractAddress: identity.contractAddress,
     tokenUri,
@@ -352,6 +415,9 @@ async function readBatchFromChain(
     network: `${networkName} · ${config.chainId}`,
     imageUrl: imageVerified === 'match' && imageCid ? ipfsFileUrl(imageCid) : undefined,
     warnings,
+    wallets,
+    ownerAddress: owner,
+    farmerAddress: creator,
   }
   return { kind: 'ok', batch }
 }
@@ -386,3 +452,56 @@ export async function inspectPublicChain(
     provider.destroy()
   }
 }
+
+/** Mã lô mẫu của dữ liệu seed; chỉ có trên mạng local (Sepolia thật không có sẵn các mã này). */
+export const sampleBatchCodes: readonly string[] =
+  config.chainId === 31337 ? ['COCONUT-001', 'COCONUT-002', 'COCONUT-003', 'COCONUT-004', 'COCONUT-005', 'COCONUT-006'] : []
+
+export type TraceLookup =
+  | { kind: 'found'; path: string }
+  | { kind: 'notFound' }
+  | { kind: 'unconfigured'; missing: string[] }
+  | { kind: 'rpcTimeout' }
+  | { kind: 'rpcUnavailable' }
+
+const TRACE_URL = /\/trace\/(\d+)\/(0x[0-9a-fA-F]{40})\/(\d+)(?![\d])/
+
+/**
+ * Chuyển nội dung người dùng nhập hoặc quét thành đường dẫn trang truy xuất.
+ * Nhận: URL/đường dẫn của mã QR, tokenId (số, có thể kèm #) hoặc batchCode (tra qua getTokenIdByCode).
+ */
+export async function resolveTraceTarget(input: string, signal: AbortSignal): Promise<TraceLookup> {
+  const text = input.trim()
+  if (!text) return { kind: 'notFound' }
+
+  const fromUrl = TRACE_URL.exec(text)
+  if (fromUrl) return { kind: 'found', path: `/trace/${fromUrl[1]}/${fromUrl[2]}/${fromUrl[3]}` }
+
+  const missing: string[] = []
+  if (!config.publicRpcUrl || !validRpcUrl(config.publicRpcUrl)) missing.push('VITE_PUBLIC_RPC_URL')
+  if (!config.contractAddress || !isAddress(config.contractAddress))
+    missing.push('VITE_CONTRACT_ADDRESS')
+  if (missing.length) return { kind: 'unconfigured', missing }
+  const base = `/trace/${config.chainId}/${getAddress(config.contractAddress!)}`
+
+  const tokenText = text.replace(/^#/, '')
+  if (/^\d+$/.test(tokenText) && BigInt(tokenText) > 0n)
+    return { kind: 'found', path: `${base}/${BigInt(tokenText)}` }
+
+  const provider = new JsonRpcProvider(config.publicRpcUrl, undefined, { batchMaxCount: 1 })
+  try {
+    const contract = new Contract(config.contractAddress!, abiFile.abi, provider)
+    for (const code of new Set([text, text.toUpperCase()])) {
+      const id: bigint = await withDeadline(contract.getTokenIdByCode(code), signal)
+      if (id > 0n) return { kind: 'found', path: `${base}/${id}` }
+    }
+    return { kind: 'notFound' }
+  } catch (error) {
+    if (signal.aborted) throw error
+    if (error instanceof Error && error.message === 'RPC_TIMEOUT') return { kind: 'rpcTimeout' }
+    return { kind: 'rpcUnavailable' }
+  } finally {
+    provider.destroy()
+  }
+}
+

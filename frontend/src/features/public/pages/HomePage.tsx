@@ -3,9 +3,9 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useSession } from '../../../app/session'
 import { Button, Card } from '../../../components/ui'
 import { HomeIcon } from '../components/HomeIcon'
+import { sampleBatchCodes } from '../services/publicChainReader'
 import '../styles/home.css'
 
-const examples = ['COCONUT-001', 'COCONUT-002', 'COCONUT-003'] as const
 
 const stages = [
   {
@@ -82,14 +82,16 @@ export function HomePage() {
                 <Button type="submit">Tra cứu</Button>
               </div>
             </form>
-            <div className="home-examples">
-              <span>Thử với lô mẫu:</span>
-              {examples.map((code) => (
-                <Link key={code} to={`/trace/demo/${code}`}>
-                  {code}
-                </Link>
-              ))}
-            </div>
+            {sampleBatchCodes.length > 0 && (
+              <div className="home-examples">
+                <span>Thử với lô mẫu:</span>
+                {sampleBatchCodes.slice(0, 3).map((code) => (
+                  <Link key={code} to={`/trace?q=${code}`}>
+                    {code}
+                  </Link>
+                ))}
+              </div>
+            )}
             <Link className="home-wallet-link" to={managementUrl}>
               <HomeIcon name="wallet" size={19} />
               {role ? 'Vào bảng điều khiển' : 'Kết nối ví để quản lý lô'}
@@ -174,8 +176,12 @@ export function HomePage() {
             và SHA-256 riêng để đối chiếu. Hash khớp cho biết tệp không bị thay đổi, không thay thế
             kiểm định an toàn thực phẩm.
           </p>
-          <Link className="home-document-link" to="/trace/demo/COCONUT-001">
-            Xem lô mẫu <HomeIcon name="arrow" size={18} />
+          <Link
+            className="home-document-link"
+            to={sampleBatchCodes.length > 0 ? `/trace?q=${sampleBatchCodes[0]}` : '/trace'}
+          >
+            {sampleBatchCodes.length > 0 ? 'Xem lô mẫu' : 'Tra cứu lô'}{' '}
+            <HomeIcon name="arrow" size={18} />
           </Link>
         </div>
         <div className="home-certificate" aria-label="Minh họa cấu trúc hồ sơ công khai">

@@ -34,7 +34,7 @@ export function TraceDetailView({ batch }: { batch: DemoBatch }) {
       label: 'Lịch sử NFT',
       mobileLabel: 'Lịch sử NFT (ERC-721)',
       icon: 'hash',
-      content: <TraceNFTPanel ownership={batch.ownership} live />,
+      content: <TraceNFTPanel ownership={batch.ownership} wallets={batch.wallets} />,
     },
     {
       id: 'documents',
@@ -96,10 +96,6 @@ export function TraceDetailView({ batch }: { batch: DemoBatch }) {
         )}
         <TraceBatchSummary batch={batch} recalled={batch.recalled} expired={expired} />
         <TraceSections sections={sections} />
-        <p className="trace-detail-disclaimer">
-          Blockchain chứng minh dữ liệu đã được ghi và người ký, không chứng minh chất lượng hay an
-          toàn thực phẩm.
-        </p>
       </div>
     </div>
   )

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Logo } from '../components/common'
 import { useSession } from '../app/session'
+import { networkName } from '../config/env'
 export function PublicLayout() {
   const [menu, setMenu] = useState(false)
   const location = useLocation()
@@ -78,7 +79,7 @@ export function PublicLayout() {
             <div>
               <strong>Công nghệ</strong>
               <p>
-                Ethereum Sepolia
+                {networkName}
                 <br />
                 NFT ERC-721
                 <br />

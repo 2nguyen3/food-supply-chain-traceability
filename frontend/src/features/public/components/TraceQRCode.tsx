@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { QRCodeCanvas } from 'qrcode.react'
 import { Button, Card } from '../../../components/ui'
 import { TraceIcon } from './TraceIcon'
@@ -27,7 +26,7 @@ export function TraceQRCode({ code, path: livePath }: { code: string; path?: str
     }
     const link = document.createElement('a')
     link.href = canvas.toDataURL('image/png')
-    link.download = `qr-demo-${code}.png`
+    link.download = `qr-${code}.png`
     link.click()
     setFeedback('Đã tải ảnh QR.')
   }
@@ -42,7 +41,7 @@ export function TraceQRCode({ code, path: livePath }: { code: string; path?: str
             level="M"
             marginSize={1}
             style={{ width: '100%', height: 'auto' }}
-            aria-label={`Mã QR demo cho lô ${code}`}
+            aria-label={`Mã QR cho lô ${code}`}
           />
         </div>
         <strong>{code}</strong>
@@ -53,9 +52,6 @@ export function TraceQRCode({ code, path: livePath }: { code: string; path?: str
           <Button variant="secondary" type="button" onClick={copyUrl}>
             <TraceIcon name="copy" /> Sao chép liên kết
           </Button>
-          <Link className="button secondary" to={path} target="_blank" rel="noopener noreferrer">
-            <TraceIcon name="external" /> Mở trang truy xuất
-          </Link>
           <Button variant="secondary" type="button" onClick={downloadQr}>
             <TraceIcon name="download" /> Tải mã QR
           </Button>
@@ -67,9 +63,6 @@ export function TraceQRCode({ code, path: livePath }: { code: string; path?: str
           <div>
             <p>URL được mã hóa trong QR</p>
             <p className="trace-qr-url mono">{url}</p>
-            <p className="trace-qr-warning">
-              QR chỉ chứa địa chỉ công khai, không chứa khóa riêng, hóa đơn hay trạng thái.
-            </p>
           </div>
         </details>
         {feedback && (

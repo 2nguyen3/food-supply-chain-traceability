@@ -25,6 +25,24 @@ function Field({ label, value, mono = false }: { label: string; value?: string; 
   )
 }
 
+const VN_ZONE = 'Asia/Ho_Chi_Minh'
+
+/** Ngày giờ theo giờ Việt Nam; chuỗi chỉ có ngày (YYYY-MM-DD) thì đổi sang dd/MM/yyyy. */
+function formatMoment(value?: string, withTime = true): string | undefined {
+  if (!value) return value
+  const plain = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (plain) return `${plain[3]}/${plain[2]}/${plain[1]}`
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('vi-VN', {
+    timeZone: VN_ZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
+  }).format(date)
+}
+
 export function TraceBatchSummary({
   batch,
   recalled,
@@ -38,17 +56,18 @@ export function TraceBatchSummary({
   return (
     <section className="trace-summary" aria-labelledby="trace-batch-code">
       <div className="trace-summary-image">
-        <img
-          src={batch.imageUrl ?? '/images/home/coconut-cluster.jpg'}
-          alt={`Ảnh của lô ${batch.code}`}
-          width="1024"
-          height="1536"
-        />
+        {batch.imageUrl ? (
+          <img src={batch.imageUrl} alt={`Ảnh của lô ${batch.code}`} width="1024" height="1536" />
+        ) : (
+          <div className="trace-summary-image-empty">
+            <TraceIcon name="image" />
+            <span>Chưa có ảnh đã xác minh</span>
+          </div>
+        )}
         <div className="trace-summary-image-shade" aria-hidden="true" />
         <div className="trace-summary-image-copy">
           <p>Lô dừa tươi · 1.000 kg · 1 NFT</p>
           <h1 id="trace-batch-code">{batch.code}</h1>
-          {batch.imageUrl && <span>Ảnh gốc từ IPFS · SHA-256 khớp blockchain</span>}
         </div>
       </div>
 
@@ -91,8 +110,8 @@ export function TraceBatchSummary({
           <Field label="Nhóm thu hoạch" value={batch.harvestGroupId} mono />
           <Field label="Vị trí nông trại" value={batch.farmLocation} />
           <Field label="Giống dừa" value={batch.variety} />
-          <Field label="Ngày thu hoạch" value={batch.harvestDate} />
-          <Field label="Hạn sử dụng" value={batch.expiryDate} />
+          <Field label="Ngày thu hoạch" value={formatMoment(batch.harvestDate, false)} />
+          <Field label="Hạn sử dụng" value={formatMoment(batch.expiryDate)} />
           <Field label="Khối lượng" value="1.000 kg" />
           <Field
             label="Chủ sở hữu NFT"

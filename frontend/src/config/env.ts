@@ -18,6 +18,13 @@ export const config: PublicConfig = {
 
 const NETWORK_NAMES: Record<number, string> = { 11155111: 'Ethereum Sepolia', 31337: 'Hardhat (local)' }
 export const networkName = NETWORK_NAMES[config.chainId] ?? `Chain ${config.chainId}`
+
+// Trình duyệt block explorer theo mạng; mạng local không có explorer nên không tạo liên kết
+const EXPLORERS: Record<number, string> = { 11155111: 'https://sepolia.etherscan.io' }
+export function explorerUrl(kind: 'tx' | 'address', value: string): string | undefined {
+  const base = EXPLORERS[config.chainId]
+  return base ? `${base}/${kind}/${value}` : undefined
+}
 export function validateProductionConfig(): string[] {
   const missing: string[] = []
   if (!config.publicRpcUrl) missing.push('VITE_PUBLIC_RPC_URL')

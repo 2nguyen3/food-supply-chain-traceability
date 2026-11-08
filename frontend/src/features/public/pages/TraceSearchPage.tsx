@@ -1,29 +1,27 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { Button, Card, EmptyState, ErrorState, LoadingState } from '../../../components/ui'
+import { Button, EmptyState, ErrorState, LoadingState } from '../../../components/ui'
 import { HomeIcon } from '../components/HomeIcon'
-import { findDemoCode, TRACE_DEMO_CODES } from '../mocks/traceSearchFixtures'
+import { QrScanTools, QrScanView } from '../components/QrScanner'
+import { useQrScanner } from '../components/useQrScanner'
+import {
+  resolveTraceTarget,
+  sampleBatchCodes,
+  type TraceLookup,
+} from '../services/publicChainReader'
 import '../styles/trace-search.css'
 
-type SearchResult = {
-  query: string
-  mockUnavailable: boolean
-  status: 'loading' | 'not-found' | 'unavailable'
-}
+type Failure = Exclude<TraceLookup, { kind: 'found' }>
+type SearchResult = { query: string; attempt: number; failure: Failure }
 
 export function TraceSearchPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
   const query = (searchParams.get('q') ?? '').trim()
-  const mockUnavailable = import.meta.env.DEV && searchParams.get('mockError') === 'unavailable'
   const [input, setInput] = useState(query)
   const [showEmptyHint, setShowEmptyHint] = useState(false)
   const [attempt, setAttempt] = useState(0)
-  const [result, setResult] = useState<SearchResult>({
-    query,
-    mockUnavailable,
-    status: 'loading',
-  })
+  const [result, setResult] = useState<SearchResult | null>(null)
 
   useEffect(() => {
     setInput(query)
@@ -31,46 +29,45 @@ export function TraceSearchPage() {
 
   useEffect(() => {
     if (!query) return
-    const timer = window.setTimeout(() => {
-      if (mockUnavailable) {
-        setResult({ query, mockUnavailable, status: 'unavailable' })
-        return
-      }
-      const code = findDemoCode(query)
-      if (code) {
-        navigate(`/trace/demo/${code}`, { replace: true })
-      } else {
-        setResult({ query, mockUnavailable, status: 'not-found' })
-      }
-    }, 350)
-    return () => window.clearTimeout(timer)
-  }, [query, mockUnavailable, attempt, navigate])
+    const controller = new AbortController()
+    resolveTraceTarget(query, controller.signal)
+      .then((lookup) => {
+        if (lookup.kind === 'found') navigate(lookup.path, { replace: true })
+        else setResult({ query, attempt, failure: lookup })
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return
+        console.error(error)
+        setResult({ query, attempt, failure: { kind: 'rpcUnavailable' } })
+      })
+    return () => controller.abort()
+  }, [query, attempt, navigate])
 
-  function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const trimmed = input.trim()
+  function search(text: string) {
+    const trimmed = text.trim()
     if (!trimmed) {
       setShowEmptyHint(true)
       setSearchParams({})
       return
     }
     setShowEmptyHint(false)
-    setResult({ query: trimmed, mockUnavailable: false, status: 'loading' })
-    if (trimmed === query && !mockUnavailable) setAttempt((current) => current + 1)
+    if (trimmed === query) setAttempt((current) => current + 1)
     setSearchParams({ q: trimmed })
   }
 
-  function retry() {
-    setResult({ query, mockUnavailable: false, status: 'loading' })
-    setSearchParams({ q: query })
-    setAttempt((current) => current + 1)
+  const scanner = useQrScanner((text) => {
+    setInput(text)
+    search(text)
+  })
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    search(input)
   }
 
-  const status = !query
-    ? 'empty'
-    : result.query !== query || result.mockUnavailable !== mockUnavailable
-      ? 'loading'
-      : result.status
+  const failure =
+    query && result && result.query === query && result.attempt === attempt ? result.failure : null
+  const status = !query ? 'empty' : failure ? 'failed' : 'loading'
 
   return (
     <div className="trace-search-page">
@@ -78,24 +75,27 @@ export function TraceSearchPage() {
         <p className="trace-search-eyebrow">Tra cứu công khai</p>
         <h1>Nhập mã lô hoặc quét QR</h1>
         <p className="trace-search-intro">
-          Nhập batchCode (ví dụ COCONUT-001) hoặc tokenId. Không cần ví hay đăng nhập. Mã QR trên
-          bao bì dẫn thẳng tới trang truy xuất của lô.
+          Nhập mã lô (ví dụ COCONUT-001), token ID hoặc dán đường dẫn của mã QR. Không cần ví hay
+          đăng nhập. Mã QR trên bao bì dẫn thẳng tới trang truy xuất của lô.
         </p>
 
         <form className="trace-search-form" role="search" aria-label="Tra cứu lô" onSubmit={submit}>
-          <label htmlFor="trace-search-input">Mã lô hoặc token ID</label>
+          <label htmlFor="trace-search-input">Mã lô, token ID hoặc đường dẫn QR</label>
           <div className="trace-search-controls">
-            <input
-              id="trace-search-input"
-              type="text"
-              value={input}
-              onChange={(event) => {
-                setInput(event.target.value)
-                setShowEmptyHint(false)
-              }}
-              placeholder="COCONUT-001 hoặc 1"
-              aria-describedby={showEmptyHint ? 'trace-search-hint' : undefined}
-            />
+            <div className="trace-search-field">
+              <input
+                id="trace-search-input"
+                type="text"
+                value={input}
+                onChange={(event) => {
+                  setInput(event.target.value)
+                  setShowEmptyHint(false)
+                }}
+                placeholder="COCONUT-001 hoặc 1"
+                aria-describedby={showEmptyHint ? 'trace-search-hint' : undefined}
+              />
+              <QrScanTools scanner={scanner} />
+            </div>
             <Button type="submit">
               <HomeIcon name="search" size={18} /> Tra cứu
             </Button>
@@ -107,56 +107,57 @@ export function TraceSearchPage() {
           )}
         </form>
 
-        <div className="trace-search-examples" aria-label="Mã lô ví dụ">
-          <span>Ví dụ:</span>
-          {TRACE_DEMO_CODES.map((code) => (
-            <Link key={code} to={`/trace/demo/${code}`}>
-              {code}
-            </Link>
-          ))}
-        </div>
+        <QrScanView scanner={scanner} />
+
+        {sampleBatchCodes.length > 0 && (
+          <div className="trace-search-examples" aria-label="Mã lô ví dụ">
+            <span>Ví dụ:</span>
+            {sampleBatchCodes.map((code) => (
+              <Link key={code} to={`/trace?q=${code}`}>
+                {code}
+              </Link>
+            ))}
+          </div>
+        )}
 
         <div className="trace-search-result" aria-live="polite">
           {status === 'empty' && (
             <EmptyState
               title="Chưa có mã tra cứu"
-              description="Nhập mã lô hoặc mở một lô mẫu bên trên để xem trang truy xuất."
+              description="Nhập mã lô, token ID hoặc quét mã QR để xem trang truy xuất."
             />
           )}
           {status === 'loading' && <LoadingState label="Đang tra cứu…" />}
-          {status === 'not-found' && (
+          {failure?.kind === 'notFound' && (
             <div className="trace-search-not-found">
               <ErrorState
-                title={`Không tìm thấy lô “${query}”`}
-                description="Kiểm tra lại mã trên bao bì hoặc mã QR."
+                title={`Không tìm thấy lô “${query.length > 60 ? `${query.slice(0, 60)}…` : query}”`}
+                description="Kiểm tra lại mã trên bao bì hoặc quét lại mã QR."
               />
             </div>
           )}
-          {status === 'unavailable' && (
+          {failure?.kind === 'unconfigured' && (
             <ErrorState
-              title="Dữ liệu tạm thời không khả dụng"
-              description="Vui lòng thử lại sau."
+              title="Chưa cấu hình kết nối blockchain"
+              description={`Thiếu cấu hình: ${failure.missing.join(', ')}.`}
+            />
+          )}
+          {(failure?.kind === 'rpcTimeout' || failure?.kind === 'rpcUnavailable') && (
+            <ErrorState
+              title={
+                failure.kind === 'rpcTimeout'
+                  ? 'Máy chủ blockchain phản hồi quá lâu'
+                  : 'Không kết nối được blockchain'
+              }
+              description="Đây là sự cố đọc dữ liệu, không có nghĩa lô không tồn tại. Vui lòng thử lại."
               action={
-                <Button type="button" onClick={retry}>
+                <Button type="button" onClick={() => setAttempt((current) => current + 1)}>
                   Thử lại
                 </Button>
               }
             />
           )}
         </div>
-
-        <Card className="trace-search-qr">
-          <div className="trace-search-qr-icon" aria-hidden="true">
-            QR
-          </div>
-          <div>
-            <h2>QR hoạt động thế nào?</h2>
-            <p>
-              QR chỉ chứa một địa chỉ web công khai, không chứa khóa, hóa đơn hay trạng thái. Trạng
-              thái lô được đọc tại thời điểm mở trang.
-            </p>
-          </div>
-        </Card>
       </div>
     </div>
   )

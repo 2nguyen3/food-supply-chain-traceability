@@ -16,6 +16,8 @@ export interface DemoEvent {
   at: string
   detail: string
   transactionHash?: string
+  /** Tệp đính kèm công khai của sự kiện (báo cáo sự cố, lý do thu hồi). */
+  attachment?: { label: string; url: string }
 }
 
 export interface DemoOwnership {
@@ -33,6 +35,8 @@ export interface DemoReading {
   temperatureC: number
   location?: string
   transactionHash?: string
+  /** Thời điểm block ghi nhận (khác thời điểm quan sát của thiết bị). */
+  blockTime?: string
 }
 
 export interface DemoDocument {
@@ -74,6 +78,10 @@ export interface DemoBatch {
   network?: string
   imageUrl?: string
   warnings?: string[]
+  /** Địa chỉ ví đầy đủ theo nhãn hiển thị (chỉ có khi đọc chain thật). */
+  wallets?: Record<string, string>
+  ownerAddress?: string
+  farmerAddress?: string
 }
 
 const DOCUMENTS: DemoDocument[] = [
