@@ -6,12 +6,13 @@ import {
   keccak256,
   toUtf8Bytes,
   ZeroAddress,
-  type EventLog,
   type Log,
 } from 'ethers'
 import { config, networkName } from '../../../config/env'
 import abiFile from '../../../contracts/FoodTraceability.json'
 import type { Lifecycle } from '../../../domain/types'
+import { sha256Hex } from '../../../lib/hash'
+import { argsOf, makeLogQuery } from '../../../services/chainLogs'
 import type {
   DemoBatch,
   DemoDocument,
@@ -107,13 +108,7 @@ const ROLE_LABELS: [string, string][] = [
 ]
 
 const shortAddress = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`
-const toHex = (bytes: ArrayBuffer) =>
-  Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, '0')).join('')
-
-/** SHA-256 trên đúng byte của tệp (không phải CID). */
-export async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  return toHex(await crypto.subtle.digest('SHA-256', bytes as BufferSource))
-}
+export { sha256Hex }
 
 function gatewayBases(): string[] {
   const configured = config.ipfsGateway ? [config.ipfsGateway.replace(/\/+$/, '')] : []
@@ -146,12 +141,6 @@ async function fetchIpfsBytes(cid: string, signal: AbortSignal): Promise<Uint8Ar
 const cidOf = (uri: unknown): string | undefined =>
   typeof uri === 'string' && uri.startsWith('ipfs://') ? uri.slice('ipfs://'.length) : undefined
 
-
-type Args = Record<string, unknown>
-const argsOf = (log: Log | EventLog): Args => {
-  const named = log as EventLog
-  return (named.args ? Object.fromEntries(named.fragment.inputs.map((input, i) => [input.name, named.args[i]])) : {}) as Args
-}
 
 /** Block đầu tiên có timestamp >= mốc (tìm nhị phân); lỗi RPC thì quét từ block deploy cho an toàn. */
 async function firstBlockAtOrAfter(
@@ -206,26 +195,7 @@ async function readBatchFromChain(
   // nên chỉ cần quét từ block đầu tiên có timestamp >= harvestDate thay vì từ lúc deploy.
   const latest = await withDeadline(provider.getBlockNumber(), signal)
   const from = await firstBlockAtOrAfter(provider, Number(onChain.harvestDate), config.deployBlock, latest, signal)
-  // RPC miễn phí thường giới hạn khoảng block của eth_getLogs: thử cả khoảng một lần,
-  // bị từ chối thì chia đôi và nhớ độ dài đã chạy được cho các truy vấn còn lại.
-  let span = Number.MAX_SAFE_INTEGER
-  const logs = async (name: string, ...filterArgs: unknown[]) => {
-    const filter = contract.filters[name](...filterArgs)
-    const found: (EventLog | Log)[] = []
-    let start = from
-    while (start <= latest) {
-      const end = Math.min(start + span - 1, latest)
-      try {
-        found.push(...((await contract.queryFilter(filter, start, end)) as (EventLog | Log)[]))
-        start = end + 1
-      } catch (error) {
-        if (signal.aborted) throw error
-        if (end - start < 10) throw error
-        span = Math.max(10, Math.floor((end - start + 1) / 2))
-      }
-    }
-    return found
-  }
+  const logs = makeLogQuery(contract, from, latest, signal)
   const [created, accepted, transit, sold, incidents, recalledLogs, transfers] = await withDeadline(
     Promise.all([
       logs('BatchCreated', tokenId),
