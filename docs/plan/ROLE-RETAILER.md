@@ -2,6 +2,10 @@
 
 Mã việc và ô tick nằm ở `CODE.md`; file này chỉ chỉ ra việc gì thuộc Retailer và làm theo cách nào. Làm theo mẫu **Farmer** đã chạy thật, và dùng chung màn nhận hàng với Logistics.
 
+## Môi trường chạy
+
+Mỗi người tự dựng môi trường local của mình: Hardhat node, `seed_local.py` (cần `PINATA_JWT` của riêng bạn trong `.env`), PostgreSQL, backend và frontend. Các bước ở `docs/environment.md` (mục 9 và 10). Chain trong bộ nhớ từng máy nên không dùng chung được. Đăng nhập bằng cách nhập khóa riêng của tài khoản Hardhat vào MetaMask (bảng ví ở `TESTCASE.md`, mục 0.1); sau khi dựng lại chain thì xóa dữ liệu hoạt động và số nonce trong MetaMask. Khóa Hardhat là khóa công khai, chỉ dùng local, không dùng trên Sepolia.
+
 ## Mục tiêu
 
 Người dùng Retailer đăng nhập bằng ví (ví #4 Hardhat khi chạy local), nhận lô từ Logistics sau khi xác minh hồ sơ, ghi nhận bán hết, và báo sự cố kèm bằng chứng trên IPFS. Mọi số liệu đọc từ contract, ghi bằng MetaMask. Không dùng dữ liệu mẫu.

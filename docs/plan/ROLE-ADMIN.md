@@ -2,6 +2,10 @@
 
 Mã việc và ô tick nằm ở `CODE.md`; file này chỉ chỉ ra việc gì thuộc Admin và làm theo cách nào. Làm theo mẫu **Farmer** đã chạy thật.
 
+## Môi trường chạy
+
+Mỗi người tự dựng môi trường local của mình: Hardhat node, `seed_local.py` (cần `PINATA_JWT` của riêng bạn trong `.env`), PostgreSQL, backend và frontend. Các bước ở `docs/environment.md` (mục 9 và 10). Chain trong bộ nhớ từng máy nên không dùng chung được. Đăng nhập bằng cách nhập khóa riêng của tài khoản Hardhat vào MetaMask (bảng ví ở `TESTCASE.md`, mục 0.1); sau khi dựng lại chain thì xóa dữ liệu hoạt động và số nonce trong MetaMask. Khóa Hardhat là khóa công khai, chỉ dùng local, không dùng trên Sepolia.
+
 ## Mục tiêu
 
 Admin (ví #0 Hardhat khi chạy local, người triển khai contract) cấp và thu hồi vai trò, gán farmId cho Farmer, xem các sự cố, truy ngược lô liên quan và thu hồi từng lô có lý do. Mọi số liệu đọc từ contract, ghi bằng MetaMask. Không dùng dữ liệu mẫu.
