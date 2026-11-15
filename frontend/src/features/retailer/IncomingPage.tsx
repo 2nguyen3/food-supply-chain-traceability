@@ -1,82 +1,54 @@
-import { DashboardIcon } from '../../components/common/DashboardIcon'
+import { useState } from 'react'
+import { config } from '../../config/env'
+import { toBytes32 } from '../../lib/hash'
+import { inspectPublicChain } from '../public/services/publicChainReader'
+import { sendTransaction, toTxError } from '../../services/tx'
+import { RetailerEmpty, RetailerNotice } from './components'
+import { useRetailerSnapshot } from './hooks/useRetailerSnapshot'
+import type { IncomingTransfer } from './services/retailerChain'
+import './styles/retailer.css'
 
 export default function RetailerIncomingPage() {
-  return (
-    <div className="page-container" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <header>
-        <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, color: '#1E293B' }}>Yêu cầu nhận lô</h1>
-        <p className="muted" style={{ margin: '6px 0 0 0', fontSize: 14 }}>
-          Xác minh lần lượt 3 hash SHA-256 (metadata, PDF, ảnh) rồi mới chấp nhận. Từ chối luôn khả dụng. Chủ sở hữu chỉ đổi sau biên nhận xác nhận.
-        </p>
-      </header>
-
-      {/* Khung yêu cầu đang chờ */}
-      <div
-        className="card"
-        style={{
-          padding: '60px 24px',
-          textAlign: 'center',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          borderRadius: 20,
-          border: '1px solid var(--line, #E8E2D9)',
-        }}
-      >
-        <div
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: '50%',
-            background: '#EEF5EE',
-            color: '#275641',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: 16,
-          }}
-        >
-          <DashboardIcon name="download" />
-        </div>
-        <strong style={{ fontSize: 16, color: '#1E293B' }}>Không có yêu cầu đang chờ</strong>
-        <p className="muted" style={{ fontSize: 13, margin: '6px 0 0 0' }}>
-          Khi Logistics gửi yêu cầu giao lô, yêu cầu sẽ hiện ở đây.
-        </p>
-      </div>
-
-      {/* Lịch sử xử lý */}
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: '#1E293B' }}>Lịch sử xử lý</h2>
-        <div
-          className="card"
-          style={{
-            padding: '50px 24px',
-            textAlign: 'center',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            borderRadius: 20,
-            border: '1px solid var(--line, #E8E2D9)',
-          }}
-        >
-          <div
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: '50%',
-              background: '#EEF5EE',
-              color: '#275641',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: 14,
-            }}
-          >
-            <DashboardIcon name="clock" />
-          </div>
-          <strong style={{ fontSize: 15, color: '#1E293B' }}>Chưa có lịch sử</strong>
-        </div>
-      </section>
-    </div>
-  )
+  const { data, address, error, loading, reload } = useRetailerSnapshot()
+  const [busy, setBusy] = useState<string | null>(null)
+  const [message, setMessage] = useState('')
+  const [verified, setVerified] = useState<Record<string, [string, string, string]>>({})
+  const pending = data?.incoming.filter((request) => request.status === 'pending') ?? []
+  const history = data?.incoming.filter((request) => request.status !== 'pending') ?? []
+  const checkFiles = async (request: IncomingTransfer) => {
+    if (!config.contractAddress) return
+    setBusy(request.requestId); setMessage('Đang tải ba tệp gốc và đối chiếu SHA-256…')
+    try {
+      const result = await inspectPublicChain({ chainId: String(config.chainId), contractAddress: config.contractAddress, tokenId: request.tokenId }, new AbortController().signal)
+      if (result.kind !== 'ok') throw new Error('Không tải đủ dữ liệu lô để xác minh. Chưa thể chấp nhận bàn giao.')
+      const files = ['metadata.json', 'certificate.pdf', 'batch.jpg'].map((name) => result.batch.documents.find((document) => document.name === name))
+      if (files.some((file) => file?.verified !== 'match' || !file.sha256)) throw new Error('Có tệp thiếu hoặc hash SHA-256 không khớp blockchain. Chưa thể chấp nhận.')
+      setVerified((value) => ({ ...value, [request.requestId]: files.map((file) => toBytes32(file!.sha256!)) as [string, string, string] }))
+      setMessage(`Đã đối chiếu byte gốc của 3 tệp thuộc ${request.code}. Có thể chấp nhận yêu cầu #${request.requestId}.`)
+    } catch (cause) { setMessage(cause instanceof Error ? cause.message : 'Không thể xác minh hồ sơ.') }
+    finally { setBusy(null) }
+  }
+  const act = async (request: IncomingTransfer, action: 'accept' | 'reject') => {
+    if (!address) return
+    if (action === 'reject' && !window.confirm(`Từ chối yêu cầu nhận ${request.code}?`)) return
+    const hashes = verified[request.requestId]
+    if (action === 'accept' && !hashes) { setMessage('Hãy xác minh ba tệp công khai trước khi chấp nhận.'); return }
+    setBusy(request.requestId); setMessage('Đang chờ MetaMask và biên nhận giao dịch…')
+    try {
+      await sendTransaction(address, (contract) => action === 'accept'
+        ? contract.acceptTransfer(BigInt(request.tokenId), BigInt(request.requestId), hashes)
+        : contract.rejectTransfer(BigInt(request.tokenId), BigInt(request.requestId)))
+      setVerified({}); setMessage(action === 'accept' ? `Đã nhận ${request.code} sau khi giao dịch được xác nhận.` : `Đã từ chối yêu cầu #${request.requestId}.`); reload()
+    } catch (cause) { setMessage(toTxError(cause).message) }
+    finally { setBusy(null) }
+  }
+  return <div className="retailer-page">
+    <header><h1>Yêu cầu nhận lô</h1><p>Xác minh SHA-256 của metadata, chứng chỉ PDF và ảnh gốc trước khi chấp nhận. Quyền sở hữu chỉ đổi khi giao dịch được xác nhận.</p></header>
+    <RetailerNotice loading={loading} error={error} reload={reload} />
+    {message && <div className="retailer-card" role="status">{message}</div>}
+    {data && <>
+      <section><h2>Yêu cầu đang chờ</h2>{!pending.length ? <RetailerEmpty>Không có yêu cầu đang chờ. Khi Logistics gửi yêu cầu, yêu cầu sẽ hiện ở đây.</RetailerEmpty> : <div className="retailer-list">{pending.map((request) => <div className="retailer-card" key={request.requestId}><strong>{request.code} · NFT #{request.tokenId}</strong><p>Yêu cầu #{request.requestId} · Từ Logistics <span className="retailer-mono">{request.from.slice(0, 6)}…{request.from.slice(-4)}</span></p><p>{new Date(request.requestedAt).toLocaleString('vi-VN')}</p><div className="retailer-actions"><button className="retailer-button retailer-button-outline" disabled={busy !== null} onClick={() => void checkFiles(request)}>Xác minh 3 hồ sơ</button><button className="retailer-button" disabled={busy !== null || !verified[request.requestId]} onClick={() => void act(request, 'accept')}>Chấp nhận</button><button className="retailer-button retailer-button-outline" disabled={busy !== null} onClick={() => void act(request, 'reject')}>Từ chối</button></div></div>)}</div>}</section>
+      <section><h2>Lịch sử xử lý</h2>{!history.length ? <RetailerEmpty>Chưa có lịch sử.</RetailerEmpty> : <div className="retailer-list">{history.map((request) => <div className="retailer-list-item" key={request.requestId}><strong>{request.code} · Yêu cầu #{request.requestId}</strong><span>{request.status === 'accepted' ? 'Đã chấp nhận' : request.status === 'rejected' ? 'Đã từ chối' : 'Đã hủy'}</span><small>{new Date(request.closedAt ?? request.requestedAt).toLocaleString('vi-VN')}</small></div>)}</div>}</section>
+    </>}
+  </div>
 }

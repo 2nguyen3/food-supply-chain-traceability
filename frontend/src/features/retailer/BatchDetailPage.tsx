@@ -1,90 +1,65 @@
-import { useParams, Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { config } from '../../config/env'
+import type { DemoBatch } from '../public/mocks/traceDetailFixtures'
+import { TraceDocumentsPanel, TraceJourneyPanel, TraceNFTPanel, TraceTemperaturePanel, TraceTechnicalPanel } from '../public/components/TracePanels'
+import { TraceQRCode } from '../public/components/TraceQRCode'
+import { inspectPublicChain, type PublicReadStatus } from '../public/services/publicChainReader'
+import { RetailerPrivateDocuments } from './RetailerPrivateDocuments'
+import { RetailerBadge, RetailerEmpty, RetailerFlags, RetailerNotice } from './components'
+import { useRetailerSnapshot } from './hooks/useRetailerSnapshot'
+import '../public/styles/trace-detail.css'
+import '../farmer/styles/farmer-batch-detail.css'
+import './styles/retailer.css'
+
+type Tab = 'overview' | 'public' | 'private' | 'temperature' | 'journey' | 'qr'
+const tabs: { id: Tab; label: string }[] = [
+  { id: 'overview', label: 'Tổng quan' }, { id: 'public', label: 'Tài liệu công khai' },
+  { id: 'private', label: 'Tài liệu riêng' }, { id: 'temperature', label: 'Nhiệt độ' },
+  { id: 'journey', label: 'Hành trình & NFT' }, { id: 'qr', label: 'QR' },
+]
 
 export default function RetailerBatchDetailPage() {
   const { code } = useParams<{ code: string }>()
-  const displayCode = code ? `"${code}"` : '":code"'
+  const { data, error, loading, reload } = useRetailerSnapshot()
+  const owned = data?.batches.find((batch) => batch.code === code)
+  const tokenId = owned?.tokenId
+  const [tab, setTab] = useState<Tab>('overview')
+  const [read, setRead] = useState<{ tokenId: string; result: PublicReadStatus } | null>(null)
+  const [readError, setReadError] = useState('')
+  useEffect(() => {
+    if (!tokenId || !config.contractAddress) return
+    const controller = new AbortController()
+    inspectPublicChain({ chainId: String(config.chainId), contractAddress: config.contractAddress, tokenId }, controller.signal).then(
+      (result) => { if (!controller.signal.aborted) setRead({ tokenId, result }) },
+      () => { if (!controller.signal.aborted) setReadError('Không tải được hồ sơ công khai của lô. Hãy thử tải lại trang.') },
+    )
+    return () => controller.abort()
+  }, [tokenId])
+  const result = read && read.tokenId === tokenId ? read.result : undefined
+  const batch: DemoBatch | undefined = result?.kind === 'ok' ? result.batch : undefined
 
-  return (
-    <div style={{ width: '100%', padding: '16px 0' }}>
-      <div
-        style={{
-          width: '100%',
-          minHeight: '440px',
-          backgroundColor: '#FFF7EE',
-          border: '1.5px solid #F5E5D3',
-          borderRadius: '28px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          textAlign: 'center',
-          padding: '60px 24px',
-          boxSizing: 'border-box',
-        }}
-      >
-        <div
-          style={{
-            width: '64px',
-            height: '64px',
-            borderRadius: '50%',
-            backgroundColor: '#FFFFFF',
-            border: '1px solid #F3DFC8',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: '24px',
-            color: '#B45309',
-          }}
-        >
-          <svg
-            width="26"
-            height="26"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-            <line x1="12" y1="9" x2="12" y2="13" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
-        </div>
-
-        <h2
-          style={{
-            fontSize: '22px',
-            fontWeight: '700',
-            color: '#1E293B',
-            margin: '0 0 10px 0',
-          }}
-        >
-          Không tìm thấy lô {displayCode}
-        </h2>
-
-        <p style={{ fontSize: '15px', color: '#64748B', margin: '0 0 28px 0' }}>
-          Mã lô không tồn tại.
-        </p>
-
-        <Link
-          to="/retailer/overview"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: '#275641',
-            color: '#FFFFFF',
-            padding: '12px 28px',
-            borderRadius: '12px',
-            fontSize: '15px',
-            fontWeight: '600',
-            textDecoration: 'none',
-          }}
-        >
-          Về tổng quan
-        </Link>
+  return <div className="retailer-page">
+    <Link className="retailer-batch-link" to="/retailer/batches">← Lô quản lý</Link>
+    <RetailerNotice loading={loading} error={error} reload={reload} />
+    {data && !owned && <RetailerEmpty>Không tìm thấy lô này trong các NFT ví Retailer hiện sở hữu.</RetailerEmpty>}
+    {owned && <>
+      <header><h1>{owned.code}</h1><p>Token ID #{owned.tokenId} · {owned.farmId} / {owned.harvestGroupId} · 1.000 kg · 1 NFT</p><RetailerBadge batch={owned} /><RetailerFlags batch={owned} /></header>
+      <div className="retailer-detail-tabs" role="tablist" aria-label="Thông tin lô">{tabs.map((item) => <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} onClick={() => setTab(item.id)}>{item.label}</button>)}</div>
+      <div role="tabpanel" className="retailer-card">
+        {tab === 'overview' && <dl className="retailer-detail-grid">
+          <div><dt>Mã lô</dt><dd>{owned.code}</dd></div><div><dt>Token ID</dt><dd>#{owned.tokenId}</dd></div>
+          <div><dt>Farm ID</dt><dd>{owned.farmId}</dd></div><div><dt>Nhóm thu hoạch</dt><dd>{owned.harvestGroupId}</dd></div>
+          <div><dt>Trạng thái</dt><dd>{owned.lifecycle}</dd></div><div><dt>Chủ sở hữu NFT</dt><dd className="retailer-mono">{owned.owner}</dd></div>
+          <div><dt>Hạn sử dụng</dt><dd>{new Date(owned.expiryDate).toLocaleString('vi-VN')}</dd></div>
+        </dl>}
+        {tab === 'private' && <RetailerPrivateDocuments tokenId={owned.tokenId} />}
+        {tab !== 'overview' && tab !== 'private' && !batch && <RetailerEmpty>{readError || (result ? 'Hồ sơ chi tiết chưa khả dụng. Vui lòng kiểm tra RPC và IPFS.' : 'Đang đọc hồ sơ từ blockchain và IPFS…')}</RetailerEmpty>}
+        {batch && tab === 'public' && <TraceDocumentsPanel batch={batch} />}
+        {batch && tab === 'temperature' && <TraceTemperaturePanel batch={batch} />}
+        {batch && tab === 'journey' && <div className="retailer-grid"><section><h2>Hành trình lô</h2><TraceJourneyPanel events={batch.events} live /></section><section><h2>Lịch sử NFT</h2><TraceNFTPanel ownership={batch.ownership} wallets={batch.wallets} /></section></div>}
+        {batch && tab === 'qr' && config.contractAddress && <><TraceQRCode code={owned.code} path={`/trace/${config.chainId}/${config.contractAddress}/${owned.tokenId}`} /><TraceTechnicalPanel batch={batch} /></>}
       </div>
-    </div>
-  )
+    </>}
+  </div>
 }
