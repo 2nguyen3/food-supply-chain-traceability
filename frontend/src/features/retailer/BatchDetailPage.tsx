@@ -45,14 +45,21 @@ export default function RetailerBatchDetailPage() {
     {data && !owned && <RetailerEmpty>Không tìm thấy lô này trong các NFT ví Retailer hiện sở hữu.</RetailerEmpty>}
     {owned && <>
       <header><h1>{owned.code}</h1><p>Token ID #{owned.tokenId} · {owned.farmId} / {owned.harvestGroupId} · 1.000 kg · 1 NFT</p><RetailerBadge batch={owned} /><RetailerFlags batch={owned} /></header>
+      <div className="retailer-actions">
+        {config.contractAddress && <Link className="retailer-button retailer-button-outline" to={`/trace/${config.chainId}/${config.contractAddress}/${owned.tokenId}`}>Mở trang công khai</Link>}
+      </div>
       <div className="retailer-detail-tabs" role="tablist" aria-label="Thông tin lô">{tabs.map((item) => <button key={item.id} type="button" role="tab" aria-selected={tab === item.id} onClick={() => setTab(item.id)}>{item.label}</button>)}</div>
       <div role="tabpanel" className="retailer-card">
-        {tab === 'overview' && <dl className="retailer-detail-grid">
+        {tab === 'overview' && <><dl className="retailer-detail-grid">
           <div><dt>Mã lô</dt><dd>{owned.code}</dd></div><div><dt>Token ID</dt><dd>#{owned.tokenId}</dd></div>
           <div><dt>Farm ID</dt><dd>{owned.farmId}</dd></div><div><dt>Nhóm thu hoạch</dt><dd>{owned.harvestGroupId}</dd></div>
           <div><dt>Trạng thái</dt><dd>{owned.lifecycle}</dd></div><div><dt>Chủ sở hữu NFT</dt><dd className="retailer-mono">{owned.owner}</dd></div>
           <div><dt>Hạn sử dụng</dt><dd>{new Date(owned.expiryDate).toLocaleString('vi-VN')}</dd></div>
-        </dl>}
+        </dl><div className="retailer-detail-sale">
+          {owned.lifecycle === 'Delivered' && !owned.recalled && !owned.expired && !owned.pendingRequestId
+            ? <Link className="retailer-button" to="/retailer/sales">Đánh dấu đã bán</Link>
+            : <><button className="retailer-button" disabled>Đánh dấu đã bán</button><span className="retailer-muted">{owned.recalled ? 'Lô đã thu hồi.' : owned.expired ? 'Lô đã hết hạn.' : owned.lifecycle === 'Sold' ? 'Lô đã bán.' : owned.pendingRequestId ? 'Lô đang có yêu cầu bàn giao.' : 'Chỉ lô Delivered mới có thể bán.'}</span></>}
+        </div></>}
         {tab === 'private' && <RetailerPrivateDocuments tokenId={owned.tokenId} />}
         {tab !== 'overview' && tab !== 'private' && !batch && <RetailerEmpty>{readError || (result ? 'Hồ sơ chi tiết chưa khả dụng. Vui lòng kiểm tra RPC và IPFS.' : 'Đang đọc hồ sơ từ blockchain và IPFS…')}</RetailerEmpty>}
         {batch && tab === 'public' && <TraceDocumentsPanel batch={batch} />}
