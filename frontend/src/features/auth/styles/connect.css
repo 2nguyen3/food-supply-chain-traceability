@@ -34,11 +34,16 @@
   white-space: nowrap;
 }
 
+.connect-step:not(:last-child) {
+  flex: 1 1 auto;
+}
+
 .connect-step:not(:last-child)::after {
   content: '';
-  width: 24px;
+  flex: 1 1 auto;
+  min-width: 24px;
   height: 1px;
-  margin-left: 4px;
+  margin: 0 4px;
   background: var(--line);
 }
 
@@ -232,6 +237,10 @@
 
   .connect-step {
     font-size: 13px;
+  }
+
+  .connect-step:not(:last-child) {
+    flex: none;
   }
 
   .connect-step:not(:last-child)::after {

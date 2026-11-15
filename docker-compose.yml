@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:16
+    container_name: food-traceability-db
+    restart: unless-stopped
+    environment:
+      # Tài khoản quản trị: chỉ dùng để tạo database và role, ứng dụng không dùng.
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-postgres_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?đặt POSTGRES_ADMIN_PASSWORD trong .env}
+      POSTGRES_DB: postgres
+      # Hai môi trường cục bộ, mỗi môi trường một database và một role riêng (xem db/init.sh).
+      DEV_DB_NAME: ${DEV_DB_NAME:-food_dev}
+      DEV_DB_USER: ${DEV_DB_USER:-food_dev}
+      DEV_DB_PASSWORD: ${DEV_DB_PASSWORD:?đặt DEV_DB_PASSWORD trong .env}
+      TEST_DB_NAME: ${TEST_DB_NAME:-food_test}
+      TEST_DB_USER: ${TEST_DB_USER:-food_test}
+      TEST_DB_PASSWORD: ${TEST_DB_PASSWORD:?đặt TEST_DB_PASSWORD trong .env}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - food_pgdata:/var/lib/postgresql/data
+      - ./db/init.sh:/docker-entrypoint-initdb.d/01-init.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  food_pgdata:

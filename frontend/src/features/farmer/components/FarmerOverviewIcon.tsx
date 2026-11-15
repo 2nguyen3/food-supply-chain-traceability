@@ -8,6 +8,7 @@ const paths = {
   arrow: 'M5 12h14M13 6l6 6-6 6',
   clock: 'M12 3a9 9 0 100 18 9 9 0 000-18zM12 7v5l3 2',
   leaf: 'M5 19C5 9 11 4 20 4c0 9-5 15-15 15zM5 19l8-8',
+  lock: 'M6 11h12v9H6zM9 11V8a3 3 0 016 0v3',
 } as const
 
 export type FarmerOverviewIconName = keyof typeof paths

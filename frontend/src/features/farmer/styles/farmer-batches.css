@@ -63,8 +63,7 @@
   flex: 0 1 210px;
 }
 
-.farmer-batches-field label,
-.farmer-batches-open label {
+.farmer-batches-field label {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -74,9 +73,7 @@
 }
 
 .farmer-batches-field input,
-.farmer-batches-field select,
-.farmer-batches-open input,
-.farmer-batches-open-button {
+.farmer-batches-field select {
   min-height: 44px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -86,8 +83,7 @@
 }
 
 .farmer-batches-field input,
-.farmer-batches-field select,
-.farmer-batches-open input {
+.farmer-batches-field select {
   width: 100%;
   min-width: 0;
 }
@@ -117,33 +113,6 @@
 
 .farmer-batches-count strong {
   font-weight: 500;
-}
-
-.farmer-batches-open {
-  display: grid;
-  gap: 4px;
-  flex: 1 1 265px;
-  min-width: 0;
-}
-
-.farmer-batches-open > div {
-  display: flex;
-  gap: 8px;
-  min-width: 0;
-}
-
-.farmer-batches-open-button {
-  flex: none;
-  font-weight: 700;
-}
-
-.farmer-batches-open-button:hover {
-  background: var(--ivory);
-}
-
-.farmer-batches-open > span {
-  color: var(--danger);
-  font-size: 11px;
 }
 
 .farmer-batches-table-wrap {
@@ -338,10 +307,6 @@
 @media (max-width: 1200px) {
   .farmer-batches-toolbar {
     flex-wrap: wrap;
-  }
-
-  .farmer-batches-open {
-    flex-basis: 220px;
   }
 }
 

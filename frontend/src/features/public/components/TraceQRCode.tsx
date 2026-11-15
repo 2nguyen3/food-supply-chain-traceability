@@ -1,19 +1,18 @@
 import { useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { QRCodeCanvas } from 'qrcode.react'
 import { Button, Card } from '../../../components/ui'
 import { TraceIcon } from './TraceIcon'
 
-export function TraceQRCode({ code }: { code: string }) {
+export function TraceQRCode({ code, path: livePath }: { code: string; path?: string }) {
   const canvasHolder = useRef<HTMLDivElement>(null)
   const [feedback, setFeedback] = useState('')
-  const path = `/trace/demo/${code}`
+  const path = livePath ?? `/trace/demo/${code}`
   const url = new URL(path, window.location.origin).toString()
 
   async function copyUrl() {
     try {
       await navigator.clipboard.writeText(url)
-      setFeedback('Đã sao chép liên kết demo.')
+      setFeedback('Đã sao chép liên kết.')
     } catch {
       setFeedback('Không thể sao chép tự động. Bạn có thể chọn và sao chép URL bên dưới.')
     }
@@ -27,9 +26,9 @@ export function TraceQRCode({ code }: { code: string }) {
     }
     const link = document.createElement('a')
     link.href = canvas.toDataURL('image/png')
-    link.download = `qr-demo-${code}.png`
+    link.download = `qr-${code}.png`
     link.click()
-    setFeedback('Đã tải ảnh QR của URL demo.')
+    setFeedback('Đã tải ảnh QR.')
   }
 
   return (
@@ -42,7 +41,7 @@ export function TraceQRCode({ code }: { code: string }) {
             level="M"
             marginSize={1}
             style={{ width: '100%', height: 'auto' }}
-            aria-label={`Mã QR demo cho lô ${code}`}
+            aria-label={`Mã QR cho lô ${code}`}
           />
         </div>
         <strong>{code}</strong>
@@ -53,9 +52,6 @@ export function TraceQRCode({ code }: { code: string }) {
           <Button variant="secondary" type="button" onClick={copyUrl}>
             <TraceIcon name="copy" /> Sao chép liên kết
           </Button>
-          <Link className="button secondary" to={path} target="_blank" rel="noopener noreferrer">
-            <TraceIcon name="external" /> Mở trang truy xuất
-          </Link>
           <Button variant="secondary" type="button" onClick={downloadQr}>
             <TraceIcon name="download" /> Tải mã QR
           </Button>
@@ -65,16 +61,8 @@ export function TraceQRCode({ code }: { code: string }) {
             Thông tin kỹ thuật <TraceIcon name="down" />
           </summary>
           <div>
-            <p>URL được mã hóa trong QR (bản demo)</p>
+            <p>URL được mã hóa trong QR</p>
             <p className="trace-qr-url mono">{url}</p>
-            <p>URL chuẩn khi triển khai chính thức</p>
-            <p className="trace-qr-url mono">
-              /trace/11155111/{'{contractAddress}'}/{'{tokenId}'}
-            </p>
-            <p className="trace-qr-warning">
-              QR chỉ chứa địa chỉ công khai, không chứa khóa riêng, hóa đơn hay trạng thái. URL demo
-              không phải URL của hợp đồng đã triển khai.
-            </p>
           </div>
         </details>
         {feedback && (

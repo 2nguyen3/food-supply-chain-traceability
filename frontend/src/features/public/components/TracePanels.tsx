@@ -1,5 +1,7 @@
-import { DataTable, EmptyState } from '../../../components/ui'
+import { lazy, Suspense } from 'react'
+import { DataTable, EmptyState, LoadingState } from '../../../components/ui'
 import type { DemoBatch, DemoEvent, DemoOwnership, DemoReading } from '../mocks/traceDetailFixtures'
+import { ExplorerLink } from './ExplorerLink'
 import { TraceIcon, type TraceIconName } from './TraceIcon'
 import { TraceQRCode } from './TraceQRCode'
 
@@ -23,7 +25,7 @@ function formatDateTime(value: string): string {
   }).format(new Date(value))
 }
 
-export function TraceJourneyPanel({ events }: { events: DemoEvent[] }) {
+export function TraceJourneyPanel({ events, live = false }: { events: DemoEvent[]; live?: boolean }) {
   const sorted = [...events].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
   return (
     <div className="trace-journey-grid">
@@ -36,26 +38,29 @@ export function TraceJourneyPanel({ events }: { events: DemoEvent[] }) {
             <div>
               <h3>{EVENT_META[event.kind].label}</h3>
               <p>{event.detail}</p>
+              {event.attachment && (
+                <a
+                  className="trace-event-attachment"
+                  href={event.attachment.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <TraceIcon name="file" /> {event.attachment.label}
+                </a>
+              )}
               <small>
-                {formatDateTime(event.at)} · Thời gian mô phỏng
+                {formatDateTime(event.at)} · {live ? 'Thời gian block' : 'Thời gian'}
                 {event.transactionHash ? (
-                  <span className="mono"> · {event.transactionHash}</span>
+                  <>
+                    {' · '}
+                    <ExplorerLink kind="tx" value={event.transactionHash} />
+                  </>
                 ) : null}
               </small>
             </div>
           </li>
         ))}
       </ol>
-      <aside className="trace-journey-note">
-        <TraceIcon name="info" />
-        <div>
-          <strong>Hành trình ≠ lịch sử NFT</strong>
-          <p>
-            Mỗi bàn giao chỉ là một bước (TransferAccepted và Transfer cùng một lần chuyển quyền).
-            Lịch sử ERC-721 nằm ở tab riêng.
-          </p>
-        </div>
-      </aside>
     </div>
   )
 }
@@ -67,114 +72,23 @@ function isOutOfRange(reading: DemoReading, batch: DemoBatch): boolean {
   )
 }
 
-function TemperatureChart({ batch }: { batch: DemoBatch }) {
-  const readings = batch.readings
-  const width = 640
-  const height = 260
-  const left = 72
-  const right = 28
-  const top = 20
-  const bottom = 44
-  const low = Math.min(4, ...readings.map((reading) => reading.temperatureC - 2))
-  const high = Math.max(22, ...readings.map((reading) => reading.temperatureC + 2))
-  const x = (index: number) =>
-    left + (index / Math.max(readings.length - 1, 1)) * (width - left - right)
-  const y = (value: number) => top + ((high - value) / (high - low)) * (height - top - bottom)
-  const path = readings
-    .map((reading, index) => `${index ? 'L' : 'M'}${x(index)} ${y(reading.temperatureC)}`)
-    .join(' ')
-
-  return (
-    <figure className="trace-chart">
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label={`Biểu đồ nhiệt độ mô phỏng theo thời gian: ${readings.map((reading) => `${reading.temperatureC} độ C`).join(', ')}`}
-      >
-        {batch.minTemperatureC !== undefined && batch.maxTemperatureC !== undefined && (
-          <rect
-            x={left}
-            y={y(batch.maxTemperatureC)}
-            width={width - left - right}
-            height={y(batch.minTemperatureC) - y(batch.maxTemperatureC)}
-            fill="var(--sage)"
-            opacity="0.75"
-          />
-        )}
-        {[4, 8, 12, 16, 20].map((tick) => (
-          <g key={tick}>
-            <line x1={left} x2={width - right} y1={y(tick)} y2={y(tick)} stroke="var(--line)" />
-            <text x={left - 9} y={y(tick) + 4} textAnchor="end" className="trace-chart-axis">
-              {tick}°
-            </text>
-          </g>
-        ))}
-        {batch.minTemperatureC !== undefined && batch.maxTemperatureC !== undefined && (
-          <text
-            x={width - right - 4}
-            y={y(batch.maxTemperatureC) - 5}
-            textAnchor="end"
-            className="trace-chart-threshold"
-          >
-            Ngưỡng {batch.minTemperatureC}–{batch.maxTemperatureC}°C
-          </text>
-        )}
-        <path d={path} fill="none" stroke="var(--forest)" strokeWidth="3" strokeLinejoin="round" />
-        {readings.map((reading, index) => {
-          const out = isOutOfRange(reading, batch)
-          return (
-            <g key={reading.id}>
-              {out ? (
-                <path
-                  d={`M${x(index)},${y(reading.temperatureC) - 11} l9,16 h-18z`}
-                  fill="var(--danger)"
-                />
-              ) : (
-                <circle
-                  cx={x(index)}
-                  cy={y(reading.temperatureC)}
-                  r="5"
-                  fill="var(--white)"
-                  stroke="var(--forest)"
-                  strokeWidth="2.5"
-                />
-              )}
-              <text
-                x={x(index)}
-                y={y(reading.temperatureC) - 14}
-                textAnchor="middle"
-                className={out ? 'trace-chart-warning' : 'trace-chart-value'}
-              >
-                {reading.temperatureC}°C
-              </text>
-              <text x={x(index)} y={height - 14} textAnchor="middle" className="trace-chart-axis">
-                #{reading.id}
-              </text>
-            </g>
-          )
-        })}
-      </svg>
-      <figcaption>
-        Dữ liệu nhiệt độ và thời điểm quan sát là fixture mô phỏng, không phải đo từ thiết bị IoT
-        thật. Vùng xanh là ngưỡng minh họa trong fixture.
-      </figcaption>
-    </figure>
-  )
-}
+const TemperatureChart = lazy(() => import('./TemperatureChart'))
 
 export function TraceTemperaturePanel({ batch }: { batch: DemoBatch }) {
   if (!batch.readings.length) {
     return (
       <EmptyState
         title="Chưa có bản ghi vận chuyển"
-        description="Fixture của lô này chưa có dữ liệu nhiệt độ để hiển thị."
+        description="Lô này chưa có bản ghi nhiệt độ từ thiết bị vận chuyển."
       />
     )
   }
   const exceeded = batch.readings.filter((reading) => isOutOfRange(reading, batch))
   return (
     <div className="trace-temperature-panel">
-      <TemperatureChart batch={batch} />
+      <Suspense fallback={<LoadingState label="Đang tải biểu đồ…" />}>
+        <TemperatureChart batch={batch} />
+      </Suspense>
       {exceeded.length > 0 && (
         <div className="trace-warning" role="alert">
           <strong>
@@ -182,7 +96,7 @@ export function TraceTemperaturePanel({ batch }: { batch: DemoBatch }) {
             {exceeded.map((reading) => `${reading.temperatureC}°C`).join(', ')}
           </strong>
           <p>
-            Đây là lần vượt ngưỡng trong dữ liệu mẫu; không tự động chứng minh lô mất an toàn thực
+            Đây là lần vượt ngưỡng trong dữ liệu; không tự động chứng minh lô mất an toàn thực
             phẩm.
           </p>
         </div>
@@ -191,12 +105,12 @@ export function TraceTemperaturePanel({ batch }: { batch: DemoBatch }) {
         columns={[
           {
             key: 'id',
-            label: 'readingId',
+            label: 'Mã bản ghi',
             render: (reading: DemoReading) => <span className="mono">#{reading.id}</span>,
           },
           {
             key: 'time',
-            label: 'observedAt (mẫu)',
+            label: 'Thời điểm quan sát',
             render: (reading: DemoReading) => formatDateTime(reading.observedAt),
           },
           {
@@ -207,15 +121,15 @@ export function TraceTemperaturePanel({ batch }: { batch: DemoBatch }) {
                 {isOutOfRange(reading, batch) && (
                   <TraceIcon name="warn" className="trace-table-icon" />
                 )}
-                {reading.temperatureC.toFixed(1)}°C{' '}
-                <small className="mono">({Math.round(reading.temperatureC * 100)} centi°C)</small>
+                {reading.temperatureC.toFixed(1)}°C
               </>
             ),
           },
           {
             key: 'block',
             label: 'Thời điểm block ghi',
-            render: () => 'Chưa có dữ liệu',
+            render: (reading: DemoReading) =>
+              reading.blockTime ? formatDateTime(reading.blockTime) : 'Chưa có dữ liệu',
           },
           {
             key: 'location',
@@ -225,7 +139,12 @@ export function TraceTemperaturePanel({ batch }: { batch: DemoBatch }) {
           {
             key: 'transaction',
             label: 'txHash',
-            render: (reading: DemoReading) => reading.transactionHash ?? 'Chưa có dữ liệu',
+            render: (reading: DemoReading) =>
+              reading.transactionHash ? (
+                <ExplorerLink kind="tx" value={reading.transactionHash} />
+              ) : (
+                'Chưa có dữ liệu'
+              ),
           },
         ]}
         rows={batch.readings}
@@ -235,13 +154,32 @@ export function TraceTemperaturePanel({ batch }: { batch: DemoBatch }) {
   )
 }
 
-function actorLabel(actor: DemoOwnership['from'] | DemoOwnership['to']): string {
-  return actor === 'zero-address'
-    ? '0x0000000000000000000000000000000000000000 (mint)'
-    : `${actor} · chưa có địa chỉ ví`
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+
+function Actor({
+  actor,
+  wallets,
+}: {
+  actor: DemoOwnership['from'] | DemoOwnership['to']
+  wallets?: Record<string, string>
+}) {
+  if (actor === 'zero-address') return <>{ZERO_ADDRESS} (mint)</>
+  const address = wallets?.[actor]
+  if (!address) return <>{`${actor} · chưa có địa chỉ ví`}</>
+  return (
+    <ExplorerLink kind="address" value={address} className="">
+      {actor}
+    </ExplorerLink>
+  )
 }
 
-export function TraceNFTPanel({ ownership }: { ownership: DemoOwnership[] }) {
+export function TraceNFTPanel({
+  ownership,
+  wallets,
+}: {
+  ownership: DemoOwnership[]
+  wallets?: Record<string, string>
+}) {
   return (
     <div>
       <ol className="trace-ownership">
@@ -251,23 +189,23 @@ export function TraceNFTPanel({ ownership }: { ownership: DemoOwnership[] }) {
               {entry.kind === 'mint' ? 'Mint · Transfer #1' : `Transfer #${index + 1}`}
             </span>
             <strong className={entry.from === 'zero-address' ? 'mono' : undefined}>
-              {actorLabel(entry.from)}
+              <Actor actor={entry.from} wallets={wallets} />
             </strong>
             <TraceIcon name="arrow" className="trace-ownership-arrow" />
-            <strong>{actorLabel(entry.to)}</strong>
+            <strong>
+              <Actor actor={entry.to} wallets={wallets} />
+            </strong>
             <div className="trace-ownership-meta">
-              <span>{formatDateTime(entry.at)} · Mô phỏng</span>
-              <span className="mono">
-                {entry.transactionHash ?? 'Chưa có txHash trong fixture'}
-              </span>
+              <span>{formatDateTime(entry.at)}</span>
+              {entry.transactionHash ? (
+                <ExplorerLink kind="tx" value={entry.transactionHash} />
+              ) : (
+                <span className="mono">Chưa có txHash</span>
+              )}
             </div>
           </li>
         ))}
       </ol>
-      <p className="trace-panel-note">
-        Mỗi dòng là một lần đổi chủ trong lịch sử ERC-721 mẫu. Mint bắt đầu từ zero-address. Không
-        có giao dịch Sepolia thật để mở trên Etherscan.
-      </p>
     </div>
   )
 }
@@ -299,12 +237,25 @@ export function TraceDocumentsPanel({ batch }: { batch: DemoBatch }) {
               <span className="trace-document-id mono">
                 CID: {document.cid ?? 'Chưa có dữ liệu'}
               </span>
+              {document.cid && (
+                <span className="trace-document-id mono">ipfs://{document.cid}</span>
+              )}
+              {document.fileUrl && (
+                <span className="trace-document-id mono">URL gateway: {document.fileUrl}</span>
+              )}
               <span className="trace-document-id mono">
                 SHA-256: {document.sha256 ?? 'Chưa có dữ liệu'}
               </span>
             </div>
             <span className="trace-document-status">
-              <TraceIcon name="info" /> Chưa đối chiếu SHA-256
+              <TraceIcon name="info" />{' '}
+              {document.verified === 'match'
+                ? 'SHA-256 của tệp tải về KHỚP hash trên blockchain'
+                : document.verified === 'mismatch'
+                  ? 'SHA-256 KHÔNG khớp hash trên blockchain: không coi là đã xác minh'
+                  : document.verified === 'unavailable'
+                    ? 'Không tải được tệp để đối chiếu SHA-256'
+                    : 'Chưa đối chiếu SHA-256'}
             </span>
             {document.fileUrl ? (
               <a
@@ -313,7 +264,7 @@ export function TraceDocumentsPanel({ batch }: { batch: DemoBatch }) {
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Mở tệp demo
+                {batch.source === 'chain' ? 'Mở tệp gốc' : 'Mở tệp'}
               </a>
             ) : (
               <p className="trace-document-empty">Chưa có tệp để xem</p>
@@ -321,10 +272,6 @@ export function TraceDocumentsPanel({ batch }: { batch: DemoBatch }) {
           </article>
         ))}
       </div>
-      <p className="trace-panel-note">
-        Hóa đơn bán buôn là tài liệu riêng và không xuất hiện tại trang công khai. Không thể xác
-        minh SHA-256 khi thiếu tệp gốc và hash chuẩn.
-      </p>
     </div>
   )
 }
@@ -333,15 +280,19 @@ function TechnicalField({
   label,
   value,
   mono = false,
+  link,
 }: {
   label: string
   value?: string
   mono?: boolean
+  link?: 'tx' | 'address'
 }) {
   return (
     <div>
       <dt>{label}</dt>
-      <dd className={mono ? 'mono' : undefined}>{value || 'Chưa có dữ liệu'}</dd>
+      <dd className={mono ? 'mono' : undefined}>
+        {value && link ? <ExplorerLink kind={link} value={value} /> : value || 'Chưa có dữ liệu'}
+      </dd>
     </div>
   )
 }
@@ -349,21 +300,33 @@ function TechnicalField({
 export function TraceTechnicalPanel({ batch }: { batch: DemoBatch }) {
   const threshold =
     batch.minTemperatureC !== undefined && batch.maxTemperatureC !== undefined
-      ? `${batch.minTemperatureC}–${batch.maxTemperatureC}°C (mẫu)`
+      ? `${batch.minTemperatureC}–${batch.maxTemperatureC}°C`
       : undefined
   return (
     <div className="trace-technical-panel">
       <dl className="trace-technical-fields">
         <TechnicalField label="tokenId" value={`#${batch.tokenId}`} mono />
-        <TechnicalField label="Mạng dự kiến" value="Ethereum Sepolia · 11155111 (chưa kết nối)" />
-        <TechnicalField label="Địa chỉ hợp đồng" value={batch.contractAddress} mono />
+        <TechnicalField
+          label={batch.source === 'chain' ? 'Mạng' : 'Mạng dự kiến'}
+          value={batch.network ?? 'Ethereum Sepolia · 11155111 (chưa kết nối)'}
+        />
+        <TechnicalField label="Địa chỉ hợp đồng" value={batch.contractAddress} mono link="address" />
+        <TechnicalField label="Chủ sở hữu hiện tại" value={batch.ownerAddress} mono link="address" />
+        <TechnicalField label="Farmer tạo lô" value={batch.farmerAddress} mono link="address" />
         <TechnicalField label="tokenURI" value={batch.tokenUri} mono />
         <TechnicalField label="Metadata CID" value={batch.metadataCid} mono />
         <TechnicalField label="Giống dừa" value={batch.variety} />
         <TechnicalField label="Phân bón" value={batch.fertilizer} />
         <TechnicalField label="Ngưỡng nhiệt độ" value={threshold} />
       </dl>
-      <TraceQRCode code={batch.code} />
+      <TraceQRCode
+        code={batch.code}
+        path={
+          batch.source === 'chain' && batch.contractAddress
+            ? `/trace/${batch.network?.split('· ')[1] ?? ''}/${batch.contractAddress}/${batch.tokenId}`
+            : undefined
+        }
+      />
     </div>
   )
 }

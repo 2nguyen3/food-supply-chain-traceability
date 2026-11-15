@@ -1,7 +1,7 @@
 import type { Lifecycle } from '../../../domain/types'
 import { TRACE_DEMO_CODES } from './traceSearchFixtures'
 
-export type DemoActor = 'Farmer A' | 'Farmer B' | 'Logistics' | 'Retailer'
+export type DemoActor = 'Farmer A' | 'Farmer B' | 'Logistics' | 'Retailer' | (string & {})
 export type DemoEventKind =
   | 'BatchCreated'
   | 'TransferAccepted'
@@ -16,6 +16,8 @@ export interface DemoEvent {
   at: string
   detail: string
   transactionHash?: string
+  /** Tệp đính kèm công khai của sự kiện (báo cáo sự cố, lý do thu hồi). */
+  attachment?: { label: string; url: string }
 }
 
 export interface DemoOwnership {
@@ -33,14 +35,18 @@ export interface DemoReading {
   temperatureC: number
   location?: string
   transactionHash?: string
+  /** Thời điểm block ghi nhận (khác thời điểm quan sát của thiết bị). */
+  blockTime?: string
 }
 
 export interface DemoDocument {
-  name: 'certificate.pdf' | 'batch.jpg' | 'metadata.json'
+  name: 'certificate.pdf' | 'batch.jpg' | 'metadata.json' | (string & {})
   label: string
   cid?: string
   sha256?: string
   fileUrl?: string
+  /** Kết quả đối chiếu SHA-256 byte tải về với hash trên chain (chỉ có khi đọc chain thật). */
+  verified?: 'match' | 'mismatch' | 'unavailable'
 }
 
 export interface DemoBatch {
@@ -67,6 +73,15 @@ export interface DemoBatch {
   ownership: DemoOwnership[]
   readings: DemoReading[]
   documents: DemoDocument[]
+  /** 'chain' khi đọc từ blockchain thật; mặc định là dữ liệu mẫu. */
+  source?: 'demo' | 'chain'
+  network?: string
+  imageUrl?: string
+  warnings?: string[]
+  /** Địa chỉ ví đầy đủ theo nhãn hiển thị (chỉ có khi đọc chain thật). */
+  wallets?: Record<string, string>
+  ownerAddress?: string
+  farmerAddress?: string
 }
 
 const DOCUMENTS: DemoDocument[] = [

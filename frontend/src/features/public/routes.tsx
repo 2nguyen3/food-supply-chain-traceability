@@ -1,7 +1,7 @@
 import type { RouteObject } from 'react-router-dom'
 import { HomePage } from './pages/HomePage'
 import { TraceSearchPage } from './pages/TraceSearchPage'
-import { TraceDemoPage } from './pages/TraceDemoPage'
+import { TraceDemoRedirect } from './pages/TraceDemoRedirect'
 import { TraceBlockchainPage } from './pages/TraceBlockchainPage'
 export const publicRoutes: RouteObject[] = [
   {
@@ -14,7 +14,7 @@ export const publicRoutes: RouteObject[] = [
   },
   {
     path: 'trace/demo/:code',
-    element: <TraceDemoPage />,
+    element: <TraceDemoRedirect />,
   },
   {
     path: 'trace/:chainId/:contractAddress/:tokenId',

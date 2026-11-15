@@ -1,5 +1,16 @@
 type HomeIconName =
-  'leaf' | 'truck' | 'store' | 'check' | 'arrow' | 'wallet' | 'search' | 'file' | 'image' | 'json'
+  | 'leaf'
+  | 'truck'
+  | 'store'
+  | 'check'
+  | 'arrow'
+  | 'wallet'
+  | 'search'
+  | 'file'
+  | 'image'
+  | 'json'
+  | 'camera'
+  | 'qr'
 
 const paths: Record<HomeIconName, string> = {
   leaf: 'M5 19C5 9 11 4 20 4c0 9-5 15-15 15zM5 19l8-8',
@@ -12,6 +23,8 @@ const paths: Record<HomeIconName, string> = {
   search: 'M11 4a7 7 0 100 14 7 7 0 000-14zM21 21l-5-5',
   file: 'M6 3h8l5 5v13H6zM14 3v5h5M9 13h6M9 17h6',
   image: 'M3 5h18v14H3zM3 16l5-5 4 4 3-3 6 6M9 9h.01',
+  camera: 'M4 8h3l2-3h6l2 3h3v11H4zM12 17a4 4 0 100-8 4 4 0 000 8z',
+  qr: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM21 14v3M17 21h4M14 20v1M6 6.5h1M17 6.5h1M6 17.5h1',
   json: 'M8 4c-2 0-3 1-3 3v2c0 1-1 3-2 3 1 0 2 2 2 3v2c0 2 1 3 3 3M16 4c2 0 3 1 3 3v2c0 1 1 3 2 3-1 0-2 2-2 3v2c0 2-1 3-3 3',
 }
 

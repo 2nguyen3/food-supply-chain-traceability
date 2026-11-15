@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useSession } from '../../app/session'
 import { Button } from '../../components/ui'
-import { getDemoWallet } from './demoWallets'
+import { config, networkName } from '../../config/env'
+import { switchToConfiguredChain, toWalletError } from '../../services/wallet'
+import { LOGIN_STEPS, ROLE_HOME } from './steps'
 import './styles/connect.css'
 import './styles/network.css'
 
-const STEPS = ['Kết nối ví', 'Mạng Sepolia', 'Ký challenge', 'Đọc role']
+const STEPS = LOGIN_STEPS
 const ACTIVE_STEPS = 2
-const SEPOLIA_CHAIN_ID = 11155111
 
-type SwitchStage = 'idle' | 'failed' | 'switching'
+type SwitchStage = 'idle' | 'switching' | 'failed'
 
 function AlertIcon() {
   return (
@@ -49,34 +50,39 @@ function SwitchIcon() {
 }
 
 export function NetworkPage() {
-  const { session, setProductionSession } = useSession()
+  const { session, pending, setPending } = useSession()
   const navigate = useNavigate()
-  const [params] = useSearchParams()
   const [stage, setStage] = useState<SwitchStage>('idle')
+  const [failure, setFailure] = useState('')
 
-  const demoKey = params.get('w')
-  const wallet = session?.wallet ?? getDemoWallet(demoKey)
+  // Đang chờ ký (pending) hoặc đã đăng nhập nhưng ví vừa đổi sang mạng khác (session)
+  const wallet = pending ?? session?.wallet
+  const onRightChain = wallet?.chainId === config.chainId
 
   useEffect(() => {
-    if (stage !== 'switching') return
-    const timer = window.setTimeout(() => {
-      navigate(demoKey ? `/auth/sign?w=${demoKey}` : '/auth/sign', { replace: true })
-    }, 1400)
-    return () => window.clearTimeout(timer)
-  }, [stage, demoKey, navigate])
-
-  function handleSwitch() {
-    setStage('failed')
-  }
-
-  function handleRetry() {
-    if (wallet) {
-      setProductionSession({
-        source: session?.source ?? (demoKey ? 'development-preview' : 'chain'),
-        wallet: { ...wallet, chainId: SEPOLIA_CHAIN_ID },
-      })
+    if (!wallet || !onRightChain) return
+    if (pending) navigate('/auth/sign', { replace: true })
+    else {
+      const role = session?.wallet.roles[0]
+      navigate(role ? ROLE_HOME[role] : '/auth/no-access', { replace: true })
     }
+  }, [wallet, onRightChain, pending, session, navigate])
+
+  if (!wallet) return <Navigate to="/connect" replace />
+
+  async function handleSwitch() {
     setStage('switching')
+    setFailure('')
+    try {
+      await switchToConfiguredChain()
+      // trạng thái mạng mới được cập nhật qua sự kiện chainChanged của ví
+      if (pending) setPending({ ...pending, chainId: config.chainId })
+    } catch (cause) {
+      setFailure(toWalletError(cause).message)
+      setStage('failed')
+      return
+    }
+    setStage('idle')
   }
 
   const switching = stage === 'switching'
@@ -108,9 +114,8 @@ export function NetworkPage() {
             Sai mạng blockchain
           </h1>
           <p className="network-description">
-            COCOMARK yêu cầu mạng Ethereum <strong>Sepolia</strong> (chainId 11155111). Ví của bạn
-            đang ở mạng khác. Hãy chuyển mạng trong MetaMask rồi thử lại. Prototype không tự đổi
-            mạng thật.
+            COCOMARK yêu cầu mạng <strong>{networkName}</strong> (chainId {config.chainId}). Ví của
+            bạn đang ở chainId {wallet.chainId}. Hãy chuyển mạng trong MetaMask rồi thử lại.
           </p>
 
           {stage === 'failed' && (
@@ -119,7 +124,7 @@ export function NetworkPage() {
                 <AlertIcon />
               </span>
               <strong>Chuyển mạng thất bại</strong>
-              <p>Bạn đã từ chối yêu cầu chuyển mạng. Hãy thử lại.</p>
+              <p>{failure}</p>
             </div>
           )}
 
@@ -127,7 +132,7 @@ export function NetworkPage() {
             <Button
               type="button"
               className={`network-primary${stage === 'failed' ? ' network-primary-compact' : ''}`}
-              onClick={stage === 'failed' ? handleRetry : handleSwitch}
+              onClick={handleSwitch}
               disabled={switching}
             >
               <SwitchIcon />
@@ -135,7 +140,7 @@ export function NetworkPage() {
                 ? 'Đang chuyển mạng...'
                 : stage === 'failed'
                   ? 'Thử lại'
-                  : 'Chuyển sang Sepolia'}
+                  : `Chuyển sang ${networkName}`}
             </Button>
             <Link className="button secondary network-secondary" to="/">
               Về trang chủ

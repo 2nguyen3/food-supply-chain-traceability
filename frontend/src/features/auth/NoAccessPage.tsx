@@ -1,13 +1,13 @@
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useSession } from '../../app/session'
 import { Button } from '../../components/ui'
 import { useToast } from '../../components/ui/toast'
 import { WalletChip } from '../../components/common'
-import { getDemoWallet } from './demoWallets'
+import { LOGIN_STEPS, ROLE_HOME } from './steps'
 import './styles/connect.css'
 import './styles/noaccess.css'
 
-const STEPS = ['Kết nối ví', 'Mạng Sepolia', 'Ký challenge', 'Đọc role']
+const STEPS = LOGIN_STEPS
 const ACTIVE_STEPS = 4
 
 function LockIcon() {
@@ -51,11 +51,11 @@ export function NoAccessPage() {
   const { session, setProductionSession } = useSession()
   const { showToast } = useToast()
   const navigate = useNavigate()
-  const [params] = useSearchParams()
 
-  const wallet = session?.wallet ?? getDemoWallet(params.get('w'))
+  const wallet = session?.wallet
 
   if (!wallet) return <Navigate to="/connect" replace />
+  if (wallet.roles[0]) return <Navigate to={ROLE_HOME[wallet.roles[0]]} replace />
 
   function handleLogout() {
     setProductionSession(null)

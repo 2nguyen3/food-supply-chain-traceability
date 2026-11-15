@@ -3,12 +3,33 @@ import { Link } from 'react-router-dom'
 import { Badge } from '../ui'
 import { useToast } from '../ui/toast'
 import type { Lifecycle, Wallet } from '../../domain/types'
+import { config, networkName } from '../../config/env'
 import { DashboardIcon } from './DashboardIcon'
 
-export function Logo({ light = false, to = '/' }: { light?: boolean; to?: string }) {
+export function Logo({
+  light = false,
+  to = '/',
+  scrollTop = false,
+}: {
+  light?: boolean
+  to?: string
+  scrollTop?: boolean
+}) {
   return (
-    <Link className={`logo ${light ? 'light' : ''}`} to={to} aria-label="COCOMARK, về trang chủ">
-      <img src="/brand/Primary.svg" width="36" height="36" alt="" />
+    <Link
+      className={`logo ${light ? 'light' : ''}`}
+      to={to}
+      aria-label={scrollTop ? 'COCOMARK, lên đầu trang' : 'COCOMARK, về trang chủ'}
+      onClick={
+        scrollTop
+          ? (event) => {
+              event.preventDefault()
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }
+          : undefined
+      }
+    >
+      <img src={light ? '/brand/Reverse.svg' : '/brand/Primary.svg'} width="36" height="36" alt="" />
       COCOMARK
     </Link>
   )
@@ -72,11 +93,11 @@ export function WalletChip({ wallet, label }: { wallet: Wallet | null; label?: s
 export function NetworkBadge({ chainId }: { chainId?: number }) {
   return (
     <span
-      className={`network-badge ${chainId === 11155111 ? 'network-sepolia' : 'network-unknown'}`}
+      className={`network-badge ${chainId === config.chainId ? 'network-sepolia' : 'network-unknown'}`}
     >
       <span className="network-dot" aria-hidden="true" />
-      {chainId === 11155111
-        ? 'Sepolia testnet · 11155111'
+      {chainId === config.chainId
+        ? `${networkName} · ${config.chainId}`
         : chainId === undefined
           ? 'Chưa xác nhận mạng'
           : `Sai mạng · ${chainId}`}
