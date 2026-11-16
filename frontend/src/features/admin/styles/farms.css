@@ -1,21 +1,24 @@
 .farms-table th:nth-child(1) {
-  width: 24%;
+  width: 40%;
 }
 
 .farms-table th:nth-child(2) {
-  width: 24%;
+  width: 18%;
 }
 
 .farms-table th:nth-child(3) {
-  width: 16%;
+  width: 10%;
 }
 
 .farms-table th:nth-child(4) {
-  width: 12%;
+  width: 32%;
 }
 
-.farms-table th:nth-child(5) {
-  width: 24%;
+.farms-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
 
 .farms-name {
@@ -23,14 +26,20 @@
   font-weight: 700;
 }
 
-.farms-address {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--white);
+.farms-status {
+  display: block;
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--sage);
+  color: var(--forest-dark);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.farms-status.revoked {
+  background: #fdecea;
+  color: var(--danger);
 }
 
 .farms-address-line {
@@ -42,7 +51,7 @@
 
 .farms-address-line .mono {
   color: var(--cocoa);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .farms-copy {
