@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { Button, ErrorState, LoadingState, Modal, PageHeader } from '../../components/ui'
 import { useToast } from '../../components/ui/toast'
 import { TxProgressModal, type TxStepDef } from '../../components/TxProgressModal'
@@ -433,6 +433,26 @@ export function IncidentDetailPage() {
   const incidents = detail?.incidents ?? []
   const trimmedReason = reason.trim()
   const reasonValid = trimmedReason.length >= MIN_REASON_LENGTH
+
+  // Mở sẵn hộp thoại thu hồi khi được điều hướng từ trang chi tiết lô (?recall=tokenId).
+  const [searchParams] = useSearchParams()
+  const recallParam = searchParams.get('recall')
+  const autoRecall = useRef(false)
+  useEffect(() => {
+    if (!detail || autoRecall.current || !recallParam) return
+    const candidates = [
+      detail.batch,
+      ...detail.related,
+      ...detail.sameFarmOtherGroup,
+      ...detail.otherFarm,
+    ]
+    const target = candidates.find((row) => row.tokenId === recallParam && !row.recall)
+    if (!target) return
+    autoRecall.current = true
+    openRecall(target)
+    // openRecall chỉ phụ thuộc detail hiện tại; chỉ chạy một lần cho mỗi token được yêu cầu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail, recallParam])
 
   const chartReadings: ChartReading[] = useMemo(
     () =>

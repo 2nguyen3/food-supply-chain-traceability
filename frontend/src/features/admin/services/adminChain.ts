@@ -609,6 +609,212 @@ export async function readAdminBatch(
   })
 }
 
+export interface AdminBatchDocument {
+  key: 'certificate' | 'image' | 'metadata'
+  name: string
+  label: string
+  cid: string
+  /** SHA-256 on-chain (hex thường, không 0x). */
+  sha256: string
+  fileUrl: string
+  verified: 'match' | 'mismatch' | 'unavailable'
+}
+
+export interface AdminBatchDetail {
+  batch: AdminBatchRow
+  tokenUri: string
+  metadataCid: string
+  variety: string | null
+  fertilizer: string | null
+  tempMin: number | null
+  tempMax: number | null
+  documents: AdminBatchDocument[]
+  ownership: AdminOwnershipStep[]
+  readings: AdminReading[]
+  sold: AdminSoldInfo | null
+  /** Toàn bộ sự cố trên chain; trang tự lọc sự cố của lô này. */
+  incidents: AdminIncidentRow[]
+  recallArtifact: AdminArtifact | null
+  recallReasonText: string | null
+  roleLabels: Record<string, Role[]>
+  metrics: AdminReadMetrics
+}
+
+/** Chi tiết một lô theo batchCode: hồ sơ IPFS đối chiếu hash, hành trình, nhiệt độ, QR. */
+export async function readAdminBatchDetail(
+  batchCode: string,
+  signal: AbortSignal,
+): Promise<AdminBatchDetail> {
+  const started = performance.now()
+  return withChain(signal, async (ctx) => {
+    const [created, recallLogs, incidentLogs] = await Promise.all([
+      ctx.query('BatchCreated'),
+      ctx.query('BatchRecalled'),
+      ctx.query('IncidentReported'),
+    ])
+    const batches = await buildBatchRows(ctx, created, recallLogs)
+    const batch = batches.find((row) => row.batchCode === batchCode)
+    if (!batch) throw new AdminChainError('notFound', `Không tìm thấy lô ${batchCode}.`)
+
+    const tokenId = BigInt(batch.tokenId)
+    const [transfers, transitLogs, soldLogs, tokenUri, info] = await Promise.all([
+      ctx.query('Transfer', null, null, tokenId),
+      ctx.query('TransitRecorded', tokenId),
+      ctx.query('BatchSold', tokenId),
+      ctx.call(ctx.contract.tokenURI(tokenId)) as Promise<string>,
+      ctx.call(ctx.contract.getBatch(tokenId)) as Promise<Record<string, unknown>>,
+    ])
+
+    const ownership: AdminOwnershipStep[] = []
+    for (const log of transfers) {
+      const a = argsOf(log)
+      ownership.push({
+        kind: String(a.from) === ZERO_ADDRESS ? 'mint' : 'transfer',
+        from: asAddress(String(a.from)),
+        to: asAddress(String(a.to)),
+        at: await ctx.timeOf(log.blockNumber),
+        txHash: log.transactionHash,
+      })
+    }
+    ownership.sort((x, y) => Date.parse(x.at) - Date.parse(y.at))
+
+    const readings: AdminReading[] = []
+    for (const log of transitLogs) {
+      const a = argsOf(log)
+      readings.push({
+        readingId: Number(a.readingId),
+        temperatureC: Number(a.tempCenti) / 100,
+        observedAt: toIso(a.observedAt as bigint),
+        location: String(a.location),
+        at: await ctx.timeOf(log.blockNumber),
+        txHash: log.transactionHash,
+      })
+    }
+    readings.sort((x, y) => Date.parse(x.observedAt) - Date.parse(y.observedAt))
+
+    const soldLog = soldLogs[soldLogs.length - 1]
+    let sold: AdminSoldInfo | null = null
+    if (soldLog) {
+      const a = argsOf(soldLog)
+      sold = {
+        retailer: asAddress(String(a.retailer)),
+        soldAt: toIso(a.soldAt as bigint),
+        at: await ctx.timeOf(soldLog.blockNumber),
+        txHash: soldLog.transactionHash,
+      }
+    }
+
+    const incidents = await buildIncidentRows(ctx, incidentLogs, batches)
+    const batchIncidents = incidents.filter((row) => row.tokenId === batch.tokenId)
+
+    const metadataCid = cidOf(tokenUri)
+    const metadataArtifact = await readArtifact(
+      metadataCid,
+      chainHashHex(info.metadataHash),
+      signal,
+    )
+    const meta =
+      metadataArtifact.verified === 'match' &&
+      metadataArtifact.json &&
+      typeof metadataArtifact.json === 'object'
+        ? (metadataArtifact.json as Record<string, unknown>)
+        : null
+    const metaText = (key: string) =>
+      typeof meta?.[key] === 'string' ? (meta[key] as string) : null
+    const metaNumber = (key: string) =>
+      typeof meta?.[key] === 'number' ? (meta[key] as number) : null
+    const certificateCid = cidOf(meta?.certificateURI)
+    const imageCid = cidOf(meta?.image)
+    const [certificateArtifact, imageArtifact] = await Promise.all([
+      certificateCid
+        ? readArtifact(certificateCid, chainHashHex(info.certificateHash), signal)
+        : Promise.resolve(null),
+      imageCid
+        ? readArtifact(imageCid, chainHashHex(info.imageHash), signal)
+        : Promise.resolve(null),
+    ])
+
+    const document = (
+      key: AdminBatchDocument['key'],
+      name: string,
+      label: string,
+      cid: string,
+      hash: unknown,
+      artifact: AdminArtifact | null,
+    ): AdminBatchDocument => ({
+      key,
+      name,
+      label,
+      cid,
+      sha256: chainHashHex(hash),
+      fileUrl: cid ? ipfsFileUrl(cid) : '',
+      verified: artifact?.verified ?? 'unavailable',
+    })
+    const documents: AdminBatchDocument[] = [
+      document(
+        'certificate',
+        'certificate.pdf',
+        'Chứng chỉ PDF gốc',
+        certificateCid,
+        info.certificateHash,
+        certificateArtifact,
+      ),
+      document('image', 'batch.jpg', 'Ảnh gốc của lô', imageCid, info.imageHash, imageArtifact),
+      document(
+        'metadata',
+        'metadata.json',
+        'Metadata JSON công khai',
+        metadataCid,
+        info.metadataHash,
+        metadataArtifact,
+      ),
+    ]
+
+    const recallArtifact = batch.recall
+      ? await readArtifact(batch.recall.reasonCid, batch.recall.reasonHash, signal)
+      : null
+
+    const involved = new Set<string>([batch.owner, batch.farmer ?? ''])
+    for (const step of ownership) {
+      if (step.from !== ZERO_ADDRESS) involved.add(step.from)
+      if (step.to !== ZERO_ADDRESS) involved.add(step.to)
+    }
+    if (sold) involved.add(sold.retailer)
+    for (const incident of batchIncidents) involved.add(incident.reporter)
+    involved.delete('')
+    const roleLabels: Record<string, Role[]> = {}
+    await Promise.all(
+      [...involved].map(async (address) => {
+        const active = await Promise.all(
+          ROLES.map(
+            (role) => ctx.call(ctx.contract.hasRole(roleHash(role), address)) as Promise<boolean>,
+          ),
+        )
+        roleLabels[address] = ROLES.filter((_, index) => active[index])
+      }),
+    )
+
+    return {
+      batch,
+      tokenUri,
+      metadataCid,
+      variety: metaText('cultivar'),
+      fertilizer: metaText('fertilizer'),
+      tempMin: metaNumber('tempMin'),
+      tempMax: metaNumber('tempMax'),
+      documents,
+      ownership,
+      readings,
+      sold,
+      incidents,
+      recallArtifact,
+      recallReasonText: recallReasonText(recallArtifact, batch.recall),
+      roleLabels,
+      metrics: metricsOf(ctx, started),
+    }
+  })
+}
+
 /** Danh sách sự cố từ event `IncidentReported`, đối chiếu `getIncident` và `getBatch`. */
 export async function readAdminIncidents(
   signal: AbortSignal,
@@ -811,7 +1017,11 @@ export async function readAdminIncidentDetail(
     readings.sort((x, y) => Date.parse(x.observedAt) - Date.parse(y.observedAt))
 
     // Nhãn vai trò hiện tại chỉ để đọc hành trình; quyết định thu hồi không dựa vào nhãn này.
-    const involved = new Set<string>([batch.owner, batch.farmer ?? '', asAddress(String(incident.reporter))])
+    const involved = new Set<string>([
+      batch.owner,
+      batch.farmer ?? '',
+      asAddress(String(incident.reporter)),
+    ])
     for (const step of ownership) {
       if (step.from !== ZERO_ADDRESS) involved.add(step.from)
       if (step.to !== ZERO_ADDRESS) involved.add(step.to)
