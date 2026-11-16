@@ -179,6 +179,15 @@ export interface AdminArtifact {
   text: string | null
 }
 
+export interface AdminSoldInfo {
+  retailer: `0x${string}`
+  /** Thời điểm bán theo event (uint64). */
+  soldAt: string
+  /** Thời gian block chứa giao dịch. */
+  at: string
+  txHash: string
+}
+
 export interface AdminIncidentDetail {
   incident: AdminIncidentRow
   batch: AdminBatchRow
@@ -193,6 +202,16 @@ export interface AdminIncidentDetail {
   sameFarmOtherGroup: AdminBatchRow[]
   /** Khác farmId (đối chứng). */
   otherFarm: AdminBatchRow[]
+  /** Toàn bộ sự cố trên chain, dùng cho ô chọn sự cố tham chiếu khi thu hồi. */
+  incidents: AdminIncidentRow[]
+  /** Giao dịch BatchSold của lô, nếu đã bán. */
+  sold: AdminSoldInfo | null
+  /** Vai trò hiện tại (hasRole) của các ví trong hành trình, chỉ để hiển thị. */
+  roleLabels: Record<string, Role[]>
+  /** Tệp lý do thu hồi trên chain (CID trong event BatchRecalled) đã đối chiếu hash. */
+  recallArtifact: AdminArtifact | null
+  /** Lý do thu hồi chỉ đọc từ manifest JSON hợp lệ; PDF hoặc dữ liệu khác thì null. */
+  recallReasonText: string | null
   metrics: AdminReadMetrics
 }
 
@@ -208,6 +227,7 @@ interface ChainContext {
 
 const shortAddress = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`
 const asAddress = (value: string) => getAddress(value) as `0x${string}`
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 const toIso = (seconds: bigint | number) => new Date(Number(seconds) * 1000).toISOString()
 const chainHashHex = (value: unknown) =>
   String(value ?? '')
@@ -671,6 +691,53 @@ export function incidentDescription(artifact: AdminArtifact): string | null {
   return null
 }
 
+export interface RecallManifestPdf {
+  cid: string
+  sha256: string
+  name: string
+  sizeBytes: number
+}
+
+/** Manifest lý do thu hồi chỉ được chấp nhận khi đúng schema và đúng lô/sự cố đã ghi trên chain. */
+function recallManifest(
+  artifact: AdminArtifact | null,
+  recall: AdminRecallInfo | null,
+): Record<string, unknown> | null {
+  if (!artifact?.json || !recall || typeof artifact.json !== 'object') return null
+  const record = artifact.json as Record<string, unknown>
+  if (record.kind !== 'cocomark.recall-reason' || Number(record.version) !== 1) return null
+  if (String(record.tokenId) !== recall.tokenId) return null
+  if (Number(record.incidentId) !== recall.incidentId) return null
+  return record
+}
+
+/** Lý do thu hồi đọc từ `reasonText` của manifest JSON hợp lệ; PDF hoặc dữ liệu khác thì null. */
+export function recallReasonText(
+  artifact: AdminArtifact | null,
+  recall: AdminRecallInfo | null,
+): string | null {
+  const record = recallManifest(artifact, recall)
+  const text = record?.reasonText
+  return typeof text === 'string' && text.trim() ? text.trim() : null
+}
+
+/** Tệp PDF gốc trong manifest lý do thu hồi, kèm hash đã khai báo lúc thu hồi. */
+export function recallManifestPdf(
+  artifact: AdminArtifact | null,
+  recall: AdminRecallInfo | null,
+): RecallManifestPdf | null {
+  const record = recallManifest(artifact, recall)
+  const pdf = record?.pdf
+  if (!pdf || typeof pdf !== 'object') return null
+  const value = pdf as Record<string, unknown>
+  const cid = typeof value.cid === 'string' ? value.cid : ''
+  const sha256 = typeof value.sha256 === 'string' ? value.sha256 : ''
+  const name = typeof value.name === 'string' ? value.name : 'ly-do-thu-hoi.pdf'
+  const sizeBytes = Number(value.sizeBytes)
+  if (!cid || !sha256 || !Number.isFinite(sizeBytes)) return null
+  return { cid, sha256, name, sizeBytes }
+}
+
 /** Chi tiết sự cố: truy ngược lô, lô liên quan theo farmId + harvestGroupId, quyết định thu hồi. */
 export async function readAdminIncidentDetail(
   incidentId: number,
@@ -707,14 +774,13 @@ export async function readAdminIncidentDetail(
         `Không tìm thấy lô #${tokenId} của sự cố #${incidentId}.`,
       )
 
-    const incidentRow =
-      (await buildIncidentRows(ctx, incidentLogs, batches)).find(
-        (row) => row.incidentId === incidentId,
-      ) ?? null
+    const incidentRows = await buildIncidentRows(ctx, incidentLogs, batches)
+    const incidentRow = incidentRows.find((row) => row.incidentId === incidentId) ?? null
 
-    const [transfers, transitLogs] = await Promise.all([
+    const [transfers, transitLogs, soldLogs] = await Promise.all([
       ctx.query('Transfer', null, null, tokenId),
       ctx.query('TransitRecorded', tokenId),
+      ctx.query('BatchSold', tokenId),
     ])
 
     const ownership: AdminOwnershipStep[] = []
@@ -744,6 +810,37 @@ export async function readAdminIncidentDetail(
     }
     readings.sort((x, y) => Date.parse(x.observedAt) - Date.parse(y.observedAt))
 
+    // Nhãn vai trò hiện tại chỉ để đọc hành trình; quyết định thu hồi không dựa vào nhãn này.
+    const involved = new Set<string>([batch.owner, batch.farmer ?? '', asAddress(String(incident.reporter))])
+    for (const step of ownership) {
+      if (step.from !== ZERO_ADDRESS) involved.add(step.from)
+      if (step.to !== ZERO_ADDRESS) involved.add(step.to)
+    }
+    involved.delete('')
+    const roleLabels: Record<string, Role[]> = {}
+    await Promise.all(
+      [...involved].map(async (address) => {
+        const active = await Promise.all(
+          ROLES.map(
+            (role) => ctx.call(ctx.contract.hasRole(roleHash(role), address)) as Promise<boolean>,
+          ),
+        )
+        roleLabels[address] = ROLES.filter((_, index) => active[index])
+      }),
+    )
+
+    const soldLog = soldLogs[soldLogs.length - 1]
+    let sold: AdminSoldInfo | null = null
+    if (soldLog) {
+      const a = argsOf(soldLog)
+      sold = {
+        retailer: asAddress(String(a.retailer)),
+        soldAt: toIso(a.soldAt as bigint),
+        at: await ctx.timeOf(soldLog.blockNumber),
+        txHash: soldLog.transactionHash,
+      }
+    }
+
     const related = batches.filter(
       (entry) =>
         entry.tokenId !== batch.tokenId &&
@@ -765,6 +862,9 @@ export async function readAdminIncidentDetail(
       chainHashHex(incident.reportHash),
       signal,
     )
+    const recallArtifact = batch.recall
+      ? await readArtifact(batch.recall.reasonCid, batch.recall.reasonHash, signal)
+      : null
 
     return {
       incident: incidentRow ?? {
@@ -792,6 +892,11 @@ export async function readAdminIncidentDetail(
       related,
       sameFarmOtherGroup,
       otherFarm,
+      incidents: incidentRows,
+      sold,
+      roleLabels,
+      recallArtifact,
+      recallReasonText: recallReasonText(recallArtifact, batch.recall),
       metrics: metricsOf(ctx, started),
     }
   })

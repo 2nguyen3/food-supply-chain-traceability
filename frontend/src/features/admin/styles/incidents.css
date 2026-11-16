@@ -1033,3 +1033,128 @@
     grid-template-columns: 1fr;
   }
 }
+
+.incidents-report-link {
+  color: var(--forest);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  word-break: break-all;
+}
+
+.incidents-report-link:hover {
+  color: var(--forest-dark);
+}
+
+.admin-metrics {
+  margin: 10px 4px 0;
+  color: var(--cocoa-soft);
+  font-size: 13px;
+}
+
+/* D? li?u d�i d?c t? chain: cho ph�p xu?ng d�ng trong chip thay v� tr�n card */
+.incident-hash-chip {
+  max-width: 100%;
+  white-space: normal;
+}
+
+.incident-hash-chip .mono.break,
+.incident-file-link.break {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.incident-file-link {
+  color: var(--forest);
+  font-size: 12.5px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.incident-file-link:hover {
+  color: var(--forest-dark);
+}
+
+.incident-verify {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.incident-verify.match {
+  background: var(--sage);
+  color: var(--forest-dark);
+}
+
+.incident-verify.mismatch {
+  background: #fdecea;
+  color: var(--danger);
+}
+
+.incident-verify.unavailable {
+  background: #fff4e5;
+  color: #8a5a00;
+}
+
+.incident-json-note {
+  width: 100%;
+  color: var(--cocoa-soft);
+  font-size: 13px;
+}
+
+.incident-primary-action {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.incident-banner.muted {
+  color: var(--cocoa-soft);
+  font-style: italic;
+}
+
+.incident-reading-tx {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.recall-form select {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid #d9d3c4;
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--cocoa);
+  font-size: 15px;
+}
+
+.recall-form input[type='file'] {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #d9d3c4;
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--cocoa);
+  font-size: 14px;
+}
+
+.recall-file {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: var(--ivory);
+  font-size: 13.5px;
+}
+
+.recall-file .incident-hash-chip {
+  align-self: flex-start;
+}
