@@ -1,0 +1,143 @@
+.modal:has(.tx-body) {
+  width: min(100%, 720px);
+}
+.modal:has(.tx-body) .modal-head,
+.modal:has(.tx-body) .modal-body,
+.modal:has(.tx-body) .modal-foot {
+  padding: 20px 26px;
+}
+.tx-body {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.tx-method {
+  justify-self: start;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: var(--ivory);
+}
+.tx-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 24px;
+  margin: 0;
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  background: var(--ivory);
+}
+.tx-summary div {
+  min-width: 0;
+}
+.tx-summary dt {
+  color: var(--cocoa-soft);
+  font-size: 13px;
+}
+.tx-summary dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.tx-steps {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tx-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+.tx-steps li > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.tx-steps small {
+  color: var(--cocoa-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.tx-mark {
+  display: grid;
+  flex: 0 0 32px;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--line);
+  color: var(--cocoa-soft);
+  font-weight: 700;
+}
+.tx-mark svg {
+  width: 17px;
+  height: 17px;
+}
+.tx-steps .complete .tx-mark {
+  background: var(--forest);
+  color: white;
+}
+.tx-steps .active .tx-mark {
+  background: var(--harvest);
+  color: white;
+}
+.tx-steps .failed .tx-mark {
+  background: var(--cream);
+  color: var(--danger);
+}
+.tx-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #ffffff88;
+  border-top-color: white;
+  border-radius: 50%;
+  animation: tx-spin 0.8s linear infinite;
+}
+@keyframes tx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.tx-hash {
+  margin: 0;
+  font-size: 13px;
+  color: var(--cocoa-soft);
+  overflow-wrap: anywhere;
+}
+.tx-success,
+.tx-failure {
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.tx-success {
+  background: var(--sage);
+  color: var(--forest-dark);
+  font-weight: 600;
+}
+.tx-failure {
+  background: var(--cream);
+  color: var(--danger);
+}
+.tx-failure p {
+  margin: 4px 0 0;
+  color: var(--cocoa);
+  font-size: 14px;
+}
+@media (max-width: 640px) {
+  .tx-summary {
+    grid-template-columns: 1fr;
+  }
+  .modal:has(.tx-body) .modal-head,
+  .modal:has(.tx-body) .modal-body,
+  .modal:has(.tx-body) .modal-foot {
+    padding: 16px 18px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tx-spinner {
+    animation: none;
+  }
+}

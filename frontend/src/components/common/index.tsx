@@ -1,34 +1,107 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge } from '../ui'
+import { useToast } from '../ui/toast'
 import type { Lifecycle, Wallet } from '../../domain/types'
+import { config, networkName } from '../../config/env'
+import { DashboardIcon } from './DashboardIcon'
 
-export function Logo({ light = false, to = '/' }: { light?: boolean; to?: string }) {
+export function Logo({
+  light = false,
+  to = '/',
+  scrollTop = false,
+}: {
+  light?: boolean
+  to?: string
+  scrollTop?: boolean
+}) {
   return (
-    <Link className={`logo ${light ? 'light' : ''}`} to={to} aria-label="COCOMARK, về trang chủ">
-      <img src="/brand/Primary.svg" width="36" height="36" alt="" />
+    <Link
+      className={`logo ${light ? 'light' : ''}`}
+      to={to}
+      aria-label={scrollTop ? 'COCOMARK, lên đầu trang' : 'COCOMARK, về trang chủ'}
+      onClick={
+        scrollTop
+          ? (event) => {
+              event.preventDefault()
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }
+          : undefined
+      }
+    >
+      <img src={light ? '/brand/Reverse.svg' : '/brand/Primary.svg'} width="36" height="36" alt="" />
       COCOMARK
     </Link>
   )
 }
-export function WalletChip({ wallet }: { wallet: Wallet | null }) {
+export function WalletChip({ wallet, label }: { wallet: Wallet | null; label?: string }) {
+  const { showToast } = useToast()
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle')
+  useEffect(() => {
+    if (copyStatus === 'idle') return
+    const timeout = window.setTimeout(() => setCopyStatus('idle'), 2000)
+    return () => window.clearTimeout(timeout)
+  }, [copyStatus])
+
+  if (!wallet) return <span className="wallet-chip wallet-chip-empty">Chưa kết nối ví</span>
+
+  const shortAddress = `${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)}`
   return (
-    <span className="badge neutral wallet-chip">
-      Ví:{' '}
-      {wallet ? (
-        <span className="mono">
-          {wallet.address.slice(0, 6)}…{wallet.address.slice(-4)}
-        </span>
-      ) : (
-        'Chưa kết nối'
-      )}
+    <span className="wallet-chip">
+      <DashboardIcon name="wallet" className="wallet-chip-icon" />
+      {label && <span className="wallet-chip-label">{label}</span>}
+      <span className="mono wallet-chip-address" title={wallet.address}>
+        {shortAddress}
+      </span>
+      <button
+        type="button"
+        className="wallet-copy-button"
+        title="Sao chép địa chỉ ví"
+        aria-label="Sao chép địa chỉ ví"
+        onClick={() => {
+          const copy = navigator.clipboard?.writeText(wallet.address)
+          if (!copy) {
+            setCopyStatus('error')
+            showToast('Không thể sao chép địa chỉ ví trên trình duyệt này', 'error')
+            return
+          }
+          copy.then(
+            () => {
+              setCopyStatus('copied')
+              showToast('Đã sao chép địa chỉ ví', 'success')
+            },
+            () => {
+              setCopyStatus('error')
+              showToast('Không thể sao chép địa chỉ ví trên trình duyệt này', 'error')
+            },
+          )
+        }}
+      >
+        <DashboardIcon name={copyStatus === 'copied' ? 'check' : 'copy'} />
+      </button>
+      <span className="wallet-copy-status" aria-live="polite">
+        {copyStatus === 'copied'
+          ? 'Đã sao chép địa chỉ ví'
+          : copyStatus === 'error'
+            ? 'Không thể sao chép địa chỉ ví'
+            : ''}
+      </span>
     </span>
   )
 }
+
 export function NetworkBadge({ chainId }: { chainId?: number }) {
   return (
-    <Badge tone={chainId === 11155111 ? 'success' : 'warning'}>
-      {chainId === 11155111 ? 'Sepolia' : 'Chưa xác nhận mạng'}
-    </Badge>
+    <span
+      className={`network-badge ${chainId === config.chainId ? 'network-sepolia' : 'network-unknown'}`}
+    >
+      <span className="network-dot" aria-hidden="true" />
+      {chainId === config.chainId
+        ? `${networkName} · ${config.chainId}`
+        : chainId === undefined
+          ? 'Chưa xác nhận mạng'
+          : `Sai mạng · ${chainId}`}
+    </span>
   )
 }
 export function LifecycleBadge({ value }: { value: Lifecycle }) {

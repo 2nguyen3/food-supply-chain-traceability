@@ -123,20 +123,28 @@ export function Modal({
   title,
   children,
   footer,
+  wide = false,
+  className = '',
 }: {
   open: boolean
   onClose: () => void
   title: string
   children: ReactNode
   footer?: ReactNode
+  wide?: boolean
+  className?: string
 }) {
   const ref = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
   useEffect(() => {
     if (!open) return
     const previous = document.activeElement as HTMLElement | null
     ref.current?.focus()
     const key = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') onCloseRef.current()
       if (event.key === 'Tab' && ref.current) {
         const items = ref.current.querySelectorAll<HTMLElement>(
           'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])',
@@ -161,7 +169,7 @@ export function Modal({
       document.removeEventListener('keydown', key)
       previous?.focus()
     }
-  }, [open, onClose])
+  }, [open])
   if (!open) return null
   return (
     <div
@@ -171,7 +179,7 @@ export function Modal({
       }}
     >
       <div
-        className="modal"
+        className={`modal ${wide ? 'wide' : ''} ${className}`.trim()}
         ref={ref}
         tabIndex={-1}
         role="dialog"

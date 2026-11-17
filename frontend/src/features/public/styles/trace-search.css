@@ -1,0 +1,298 @@
+.trace-search-page {
+  min-height: 630px;
+  padding-block: 52px 76px;
+  background: var(--ivory);
+}
+
+.trace-search-inner {
+  max-width: 768px;
+}
+
+.trace-search-eyebrow {
+  margin-bottom: 4px;
+  color: var(--forest-dark);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.trace-search-page h1 {
+  margin-bottom: 10px;
+  font-size: clamp(2rem, 4vw, 2.5rem);
+  line-height: 1.2;
+}
+
+.trace-search-intro {
+  max-width: 700px;
+  color: var(--cocoa-soft);
+  font-size: 15px;
+}
+
+.trace-search-form {
+  margin-top: 24px;
+}
+
+.trace-search-form label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.trace-search-controls {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.trace-search-controls input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  border: 1px solid #aa9f8c;
+  border-radius: var(--radius);
+  background: var(--white);
+  padding: 10px 16px;
+  color: var(--cocoa);
+  font-size: 16px;
+}
+
+.trace-search-controls input::placeholder {
+  color: #776d60;
+}
+
+.trace-search-controls input:focus-visible {
+  border-color: var(--forest);
+}
+
+.trace-search-controls .button {
+  min-height: 48px;
+  padding-inline: 20px;
+  white-space: nowrap;
+}
+
+.trace-search-hint {
+  margin: 8px 0 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.trace-search-examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  color: var(--cocoa-soft);
+  font-size: 13px;
+}
+
+.trace-search-examples a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--white);
+  padding: 8px 12px;
+  color: var(--cocoa);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.trace-search-examples a:hover {
+  border-color: var(--forest);
+  background: var(--sage);
+  text-decoration: none;
+}
+
+.trace-search-result {
+  margin-top: 32px;
+}
+
+.trace-search-result .state {
+  min-height: 162px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.trace-search-result .state h2 {
+  margin-bottom: 6px;
+  font-size: 17px;
+}
+
+.trace-search-result .state p {
+  max-width: 550px;
+  margin-bottom: 0;
+  font-size: 14px;
+}
+
+.trace-search-result .state .button {
+  margin-top: 18px;
+}
+
+.trace-search-not-found .state.error {
+  border-color: var(--harvest);
+  background: var(--cream);
+}
+
+@media (max-width: 600px) {
+  .trace-search-page {
+    padding-block: 36px 52px;
+  }
+
+  .trace-search-controls {
+    flex-direction: column;
+  }
+
+  .trace-search-controls input {
+    flex: auto;
+    width: 100%;
+  }
+
+  .trace-search-controls .button {
+    width: 100%;
+  }
+
+  .trace-search-result {
+    margin-top: 24px;
+  }
+
+}
+
+.trace-search-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.trace-search-controls .trace-search-field input {
+  width: 100%;
+  padding-right: 104px;
+}
+
+.trace-scan-tools {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transform: translateY(-50%);
+}
+
+.trace-scan-tools .trace-scan-tool {
+  position: relative;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--forest-dark);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.trace-scan-tool svg {
+  display: block;
+  width: 22px;
+  height: 22px;
+}
+
+.trace-scan-tools .trace-scan-tool:hover {
+  background: var(--sage);
+}
+
+.trace-scan-tools .trace-scan-tool[aria-pressed='true'] {
+  background: var(--forest);
+  color: var(--white);
+}
+
+.trace-scan-tool:focus-visible,
+.trace-scan-tool:focus-within {
+  outline: 3px solid var(--harvest);
+  outline-offset: 1px;
+}
+
+.trace-scan-tool input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 0;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.trace-scanner {
+  margin-top: 4px;
+}
+
+.trace-scanner-view {
+  position: relative;
+  max-width: 420px;
+  margin-top: 12px;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--cocoa);
+}
+
+.trace-scanner-view[hidden] {
+  display: none;
+}
+
+.trace-scanner-view video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
+
+.trace-scanner-frame {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 58%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -58%);
+  border: 3px solid var(--harvest);
+  border-radius: 16px;
+  box-shadow: 0 0 0 999px rgba(42, 31, 19, 0.45);
+  pointer-events: none;
+}
+
+.trace-scanner-view p {
+  position: absolute;
+  right: 0;
+  bottom: 10px;
+  left: 0;
+  margin: 0;
+  color: var(--ivory);
+  font-size: 13px;
+  text-align: center;
+}
+
+.trace-scanner-message {
+  margin: 10px 0 0;
+  color: var(--danger);
+  font-size: 13px;
+}
