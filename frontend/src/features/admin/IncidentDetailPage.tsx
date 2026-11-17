@@ -541,6 +541,7 @@ export function IncidentDetailPage() {
 
   async function pickPdf(file: File | null) {
     setFileError('')
+    setRecallError('')
     setPdfFile(null)
     setPdfSha('')
     if (!file) return
