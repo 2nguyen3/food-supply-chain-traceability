@@ -49,7 +49,7 @@ def build_message(row: AuthNonce) -> str:
     """Dựng thông điệp ký từ các cột đã lưu; challenge và verify dùng chung hàm này."""
     return (
         f"{row.domain} wants you to sign in with your Ethereum account:\n{row.wallet}\n\n{STATEMENT}\n\n"
-        f"URI: https://{row.domain}\nChain ID: {row.chain_id}\nNonce: {row.nonce}\n"
+        f"URI: {"http" if row.domain.startswith(("127.0.0.1", "localhost")) else "https"}://{row.domain}\nChain ID: {row.chain_id}\nNonce: {row.nonce}\n"
         f"Issued At: {_iso(row.issued_at)}\nExpiration Time: {_iso(row.expires_at)}"
     )
 
