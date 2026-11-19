@@ -303,13 +303,13 @@ Dùng ví **Retailer** (#4, `0x15d3…6A65`). Mã mục: `RT`. Trạng thái lô
 
 ### Luồng RA. Tổng quan và lô đang giữ
 
-- [ ] **RT01** `/retailer/overview`: lời chào đúng địa chỉ ví, số liệu đọc từ chain, không còn dữ liệu mẫu.
-- [ ] **RT02** `/retailer/batches` có 4 lô: 001, 002, 005, 006. Không có 003 (Logistics giữ) và 004 (Farmer B giữ).
-- [ ] **RT03** Trạng thái đúng: 001 Sold, 002 Delivered, 005 Sold kèm nhãn "Đã thu hồi", 006 Delivered kèm nhãn "Hết hạn".
-- [ ] **RT04** Mở COCONUT-002: chủ sở hữu NFT là ví Retailer, hồ sơ công khai hiện đủ 3 thẻ và hash khớp, tab nhiệt độ có 5 điểm.
-- [ ] **RT05** Ô tìm theo mã lô và lọc trạng thái hoạt động (gõ `005`, lọc "Đã thu hồi").
-- [ ] **RT06** Lô COCONUT-005: hiện cảnh báo thu hồi rõ ràng, kể cả khi lô đã Sold.
-- [ ] **RT07** Mở trang công khai từ trang chi tiết: đúng lô.
+- [x] **RT01** `/retailer/overview`: lời chào đúng địa chỉ ví, số liệu đọc từ chain, không còn dữ liệu mẫu.
+- [x] **RT02** `/retailer/batches` có 4 lô: 001, 002, 005, 006. Không có 003 (Logistics giữ) và 004 (Farmer B giữ).
+- [x] **RT03** Trạng thái đúng: 001 Sold, 002 Delivered, 005 Sold kèm nhãn "Đã thu hồi", 006 Delivered kèm nhãn "Hết hạn".
+- [x] **RT04** Mở COCONUT-002: chủ sở hữu NFT là ví Retailer, hồ sơ công khai hiện đủ 3 thẻ và hash khớp, tab nhiệt độ có 5 điểm.
+- [x] **RT05** Ô tìm theo mã lô và lọc trạng thái hoạt động (gõ `005`, lọc "Đã thu hồi").
+- [x] **RT06** Lô COCONUT-005: hiện cảnh báo thu hồi rõ ràng, kể cả khi lô đã Sold.
+- [x] **RT07** Mở trang công khai từ trang chi tiết: đúng lô.
 
 ### Luồng RB. Nhận hàng từ Logistics
 
@@ -327,14 +327,14 @@ Dùng ví **Retailer** (#4, `0x15d3…6A65`). Mã mục: `RT`. Trạng thái lô
 
 ### Luồng RC. Bán hết (`markSold`)
 
-- [ ] **RT17** `/retailer/sales`: danh sách "Lô có thể bán" chỉ gồm lô Delivered, chưa hết hạn, chưa thu hồi (COCONUT-002 và 007). Lô 001, 005 (Sold) và 006 (hết hạn) không có.
-- [ ] **RT18** Ở trang chi tiết của lô bị khóa (006 hết hạn, 005 thu hồi), nút bán bị vô hiệu kèm lý do.
-- [ ] **RT19** Bán COCONUT-002, **từ chối** ký: báo từ chối, lô vẫn Delivered.
-- [ ] **RT20** Bán COCONUT-002 và xác nhận: khung tiến trình chạy hết, hiện txHash; lô thành Sold.
-- [ ] **RT21** COCONUT-002 biến khỏi "Lô có thể bán", vẫn nằm trong "Lô đang giữ" với trạng thái Sold (Retailer vẫn giữ NFT).
-- [ ] **RT22** Không bán lại được lô đã Sold (nút bị khóa; nếu cố gọi thì báo lỗi rõ).
-- [ ] **RT23** Trang công khai của COCONUT-002 hiện "Sold · Đã bán" và có mốc bán hết kèm txHash.
-- [ ] **RT24** Farmer A mở `/farmer/batches/COCONUT-002`: trạng thái đã đổi thành Sold.
+- [x] **RT17** `/retailer/sales`: danh sách "Lô có thể bán" chỉ gồm lô Delivered, chưa hết hạn, chưa thu hồi (COCONUT-002 và 007). Lô 001, 005 (Sold) và 006 (hết hạn) không có.
+- [x] **RT18** Ở trang chi tiết của lô bị khóa (006 hết hạn, 005 thu hồi), nút bán bị vô hiệu kèm lý do.
+- [x] **RT19** Bán COCONUT-002, **từ chối** ký: báo từ chối, lô vẫn Delivered.
+- [x] **RT20** Bán COCONUT-002 và xác nhận: khung tiến trình chạy hết, hiện txHash; lô thành Sold.
+- [x] **RT21** COCONUT-002 biến khỏi "Lô có thể bán", vẫn nằm trong "Lô đang giữ" với trạng thái Sold (Retailer vẫn giữ NFT).
+- [x] **RT22** Không bán lại được lô đã Sold (nút bị khóa; nếu cố gọi thì báo lỗi rõ).
+- [x] **RT23** Trang công khai của COCONUT-002 hiện "Sold · Đã bán" và có mốc bán hết kèm txHash.
+- [x] **RT24** Farmer A mở `/farmer/batches/COCONUT-002`: trạng thái đã đổi thành Sold.
 
 ### Luồng RD. Báo sự cố
 
@@ -355,10 +355,10 @@ Chuẩn bị tệp báo cáo: `backend/scripts/sample_data/incident-report.pdf`.
 
 ### Luồng RE. Quyền và cách ly
 
-- [ ] **RT37** Đăng nhập **Farmer A** rồi gõ tay `/retailer/overview`: bị chặn.
-- [ ] **RT38** Đăng nhập **Logistics** rồi gõ tay `/retailer/incoming`: bị chặn.
-- [ ] **RT39** Mở tay `/retailer/batches/COCONUT-004` (Farmer B giữ): báo không tìm thấy lô của ví này.
-- [ ] **RT40** F5 ở một trang Retailer: vẫn đăng nhập, vẫn ở đúng trang.
+- [x] **RT37** Đăng nhập **Farmer A** rồi gõ tay `/retailer/overview`: bị chặn.
+- [x] **RT38** Đăng nhập **Logistics** rồi gõ tay `/retailer/incoming`: bị chặn.
+- [x] **RT39** Mở tay `/retailer/batches/COCONUT-004` (Farmer B giữ): báo không tìm thấy lô của ví này.
+- [x] **RT40** F5 ở một trang Retailer: vẫn đăng nhập, vẫn ở đúng trang.
 
 ---
 

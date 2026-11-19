@@ -65,7 +65,7 @@ export default function RetailerBatchDetailPage() {
         {batch && tab === 'public' && <TraceDocumentsPanel batch={batch} />}
         {batch && tab === 'temperature' && <TraceTemperaturePanel batch={batch} />}
         {batch && tab === 'journey' && <div className="retailer-grid"><section><h2>Hành trình lô</h2><TraceJourneyPanel events={batch.events} live /></section><section><h2>Lịch sử NFT</h2><TraceNFTPanel ownership={batch.ownership} wallets={batch.wallets} /></section></div>}
-        {batch && tab === 'qr' && config.contractAddress && <><TraceQRCode code={owned.code} path={`/trace/${config.chainId}/${config.contractAddress}/${owned.tokenId}`} /><TraceTechnicalPanel batch={batch} /></>}
+        {batch && tab === 'qr' && config.contractAddress && <><TraceQRCode code={owned.code} path={`/trace/${config.chainId}/${config.contractAddress}/${owned.tokenId}`} /><TraceTechnicalPanel batch={batch} showQr={false} /></>}
       </div>
     </>}
   </div>
