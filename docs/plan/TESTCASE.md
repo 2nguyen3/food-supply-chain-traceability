@@ -340,18 +340,18 @@ Dùng ví **Retailer** (#4, `0x15d3…6A65`). Mã mục: `RT`. Trạng thái lô
 
 Chuẩn bị tệp báo cáo: `backend/scripts/sample_data/incident-report.pdf`.
 
-- [ ] **RT25** `/retailer/incidents/new`: danh sách lô để báo gồm lô Delivered hoặc Sold do ví này giữ (001, 002, 005, 006, và 007 nếu đã nhận). Không có lô Created hoặc InTransit.
-- [ ] **RT26** Bước nhập: chọn COCONUT-001, nhập mô tả; để trống mô tả hoặc không chọn tệp thì báo lỗi, ở lại bước hiện tại.
-- [ ] **RT27** Chọn một tệp không phải PDF (đổi đuôi `.txt` thành `.pdf`): báo "không phải PDF hợp lệ".
-- [ ] **RT28** Chọn đúng PDF: hiện tên, dung lượng, SHA-256 tính từ byte tệp.
-- [ ] **RT29** Gửi: báo cáo được tải lên IPFS, hiện CID thật; hash phản hồi của backend khớp hash tự tính.
-- [ ] **RT30** MetaMask hiện giao dịch `reportIncident`; **từ chối**: báo từ chối, **không** có sự cố nào được ghi.
-- [ ] **RT31** Xác nhận: khung tiến trình chạy hết, hiện txHash, hiện mã sự cố (incidentId).
-- [ ] **RT32** Báo sự cố cho lô Sold (001) thành công; báo thêm cho lô Delivered (007 hoặc 006) cũng thành công; lô hết hạn hoặc thu hồi (005, 006) **vẫn báo được** (không bị chặn).
-- [ ] **RT33** Trang công khai của lô vừa báo: timeline có mốc "Retailer báo sự cố" kèm txHash.
-- [ ] **RT34** Đăng nhập Admin: sự cố vừa báo xuất hiện ở trang Sự cố (xem AD22), mở được tệp báo cáo và hash khớp.
+- [x] **RT25** `/retailer/incidents/new`: danh sách lô để báo gồm lô Delivered hoặc Sold do ví này giữ (001, 002, 005, 006, và 007 nếu đã nhận). Không có lô Created hoặc InTransit.
+- [x] **RT26** Bước nhập: chọn COCONUT-001, nhập mô tả; để trống mô tả hoặc không chọn tệp thì báo lỗi, ở lại bước hiện tại.
+- [x] **RT27** Chọn một tệp không phải PDF (đổi đuôi `.txt` thành `.pdf`): báo "không phải PDF hợp lệ".
+- [x] **RT28** Chọn đúng PDF: hiện tên, dung lượng, SHA-256 tính từ byte tệp.
+- [x] **RT29** Gửi: báo cáo được tải lên IPFS, hiện CID thật; hash phản hồi của backend khớp hash tự tính.
+- [x] **RT30** MetaMask hiện giao dịch `reportIncident`; **từ chối**: báo từ chối, **không** có sự cố nào được ghi.
+- [x] **RT31** Xác nhận: khung tiến trình chạy hết, hiện txHash, hiện mã sự cố (incidentId).
+- [x] **RT32** Báo sự cố cho lô Sold (001) thành công; báo thêm cho lô Delivered (007 hoặc 006) cũng thành công; lô hết hạn hoặc thu hồi (005, 006) **vẫn báo được** (không bị chặn).
+- [x] **RT33** Trang công khai của lô vừa báo: timeline có mốc "Retailer báo sự cố" kèm txHash.
+- [x] **RT34** Đăng nhập Admin: sự cố vừa báo xuất hiện ở trang Sự cố (xem AD22), mở được tệp báo cáo và hash khớp.
 - [ ] **RT35** Đăng nhập Farmer A, thử gọi trực tiếp upload loại `incident_report` (ví dụ bằng Postman hoặc `curl` với token của Farmer A): backend từ chối 403.
-- [ ] **RT36** Báo cùng một lô nhiều lần: mỗi lần tạo sự cố mới với incidentId khác nhau (không ghi đè).
+- [x] **RT36** Báo cùng một lô nhiều lần: mỗi lần tạo sự cố mới với incidentId khác nhau (không ghi đè).
 
 ### Luồng RE. Quyền và cách ly
 

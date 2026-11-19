@@ -198,12 +198,6 @@
   min-width: 0;
 }
 
-/* Card trạng thái thu hồi — sticky khi cuộn */
-.incident-recall-status {
-  position: sticky;
-  top: 88px;
-}
-
 .incident-recall-status h2 {
   margin: 0 0 14px;
   color: var(--cocoa);
@@ -1010,9 +1004,6 @@
       'journey';
   }
 
-  .incident-recall-status {
-    position: static;
-  }
 }
 
 @media (max-width: 1100px) {

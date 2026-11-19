@@ -107,6 +107,7 @@ export default function RetailerNewIncidentPage() {
         setConfirmed(null)
         setFile(null)
         setDescription('')
+        setBroadcastedHash('')
         flow.goTo(6); flow.succeed()
         reload()
       } catch (cause) {
@@ -126,7 +127,7 @@ export default function RetailerNewIncidentPage() {
       await bindDocument(confirmed.documentId, confirmed.tokenId)
       setMessage(`Đã gắn PDF cho sự cố #${confirmed.incidentId}.`)
       flow.goTo(6); flow.succeed()
-      setConfirmed(null); setFile(null); setDescription(''); reload()
+      setConfirmed(null); setFile(null); setDescription(''); setBroadcastedHash(''); reload()
     } catch (cause) { setMessage(describeApiError(cause)) }
     finally { setBusy(false) }
   }
