@@ -1,10 +1,16 @@
-import { useState } from 'react'
-import { Button, Modal, PageHeader } from '../../components/ui'
+import { useCallback, useState } from 'react'
+import { isAddress } from 'ethers'
+import { Button, ErrorState, LoadingState, Modal, PageHeader } from '../../components/ui'
 import { useToast } from '../../components/ui/toast'
+import { TxProgressModal, type TxStepDef } from '../../components/TxProgressModal'
+import { useSession } from '../../app/session'
 import type { Role } from '../../domain/types'
-import { recordRoleChange, type RoleHistoryEntry } from './roleStore'
-import { useRoleHistory } from './roleStore'
-import { TxProgressModal } from './TxProgressModal'
+import { useStepFlow } from '../../hooks/useStepFlow'
+import { roleHash } from '../../services/roles'
+import { sendTransaction, TxError } from '../../services/tx'
+import { ExplorerLink } from '../public/components/ExplorerLink'
+import { useAdminChain } from './hooks/useAdminChain'
+import { readAdminRoles, type AdminRoleChange, type AdminRoleHolder } from './services/adminChain'
 import './styles/roles.css'
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -14,70 +20,23 @@ const ROLE_LABELS: Record<Role, string> = {
   retailer: 'Retailer',
 }
 
+const ROLE_ORDER: Role[] = ['admin', 'farmer', 'logistics', 'retailer']
 const GRANTABLE_ROLES: Role[] = ['farmer', 'logistics', 'retailer']
 
-const TX_HASH = '0xe1ae09f7a3c4d5b6e7f8091a2b3c4f3d89d'
-
-interface RoleRow {
-  id: string
-  name: string
-  address: `0x${string}`
-  role: Role | null
-  farmId: string | null
-  note?: string
-  admin?: boolean
-}
-
-const INITIAL_ROWS: RoleRow[] = [
+const TX_STEPS: TxStepDef[] = [
   {
-    id: 'admin',
-    name: 'Admin',
-    address: '0xAD00000000000000000000000000000000000001',
-    role: 'admin',
-    farmId: null,
-    admin: true,
+    label: 'Kiểm tra dữ liệu',
+    description: 'Địa chỉ ví hợp lệ, đúng mạng và đúng tài khoản Admin.',
   },
-  {
-    id: 'farmer-a',
-    name: 'Farmer A',
-    address: '0xFA00000000000000000000000000000000000001',
-    role: 'farmer',
-    farmId: 'FARM-A',
-  },
-  {
-    id: 'farmer-b',
-    name: 'Farmer B',
-    address: '0xFB00000000000000000000000000000000000001',
-    role: 'farmer',
-    farmId: 'FARM-B',
-  },
-  {
-    id: 'logistics',
-    name: 'Logistics',
-    address: '0x1000000000000000000000000000000000000001',
-    role: 'logistics',
-    farmId: null,
-  },
-  {
-    id: 'retailer',
-    name: 'Retailer',
-    address: '0xBE00000000000000000000000000000000000001',
-    role: 'retailer',
-    farmId: null,
-  },
-  {
-    id: 'no-role',
-    name: 'Ví chưa cấp quyền',
-    address: '0xEE00000000000000000000000000000000000001',
-    role: null,
-    farmId: null,
-    note: 'Dùng để thử màn không có quyền và cấp role',
-  },
+  { label: 'Ký giao dịch', description: 'Xác nhận grantRole/revokeRole trong MetaMask.' },
+  { label: 'Phát lên blockchain', description: 'Giao dịch đã gửi, chờ mạng xử lý.' },
+  { label: 'Chờ biên nhận', description: 'Đợi block xác nhận giao dịch.' },
+  { label: 'Đọc lại danh sách', description: 'Cập nhật role từ hợp đồng.' },
 ]
 
-interface ProgressState {
-  action: 'revoke' | 'grant'
-  row: RoleRow
+interface Operation {
+  action: 'grant' | 'revoke'
+  address: `0x${string}`
   role: Role
 }
 
@@ -85,14 +44,15 @@ function shortAddress(address: string): string {
   return `${address.slice(0, 6)}...${address.slice(-4)}`
 }
 
-function todayLabel(): string {
-  const now = new Date()
-  return `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`
-}
-
-// Hiển thị giờ; nếu bản ghi từ ngày trước thì kèm ngày để phân biệt.
-function formatEntryTime(entry: RoleHistoryEntry): string {
-  return entry.date === todayLabel() ? entry.time : `${entry.date} ${entry.time}`
+function formatTime(iso: string): string {
+  return new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(iso))
 }
 
 function WalletIcon() {
@@ -191,28 +151,6 @@ function StoreIcon() {
   )
 }
 
-function LockIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <rect
-        x="4.5"
-        y="10"
-        width="15"
-        height="10.5"
-        rx="2.2"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <path
-        d="M8 10V7.5a4 4 0 0 1 8 0V10"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
 function ClockIcon() {
   return (
     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -234,15 +172,50 @@ function RolePill({ role }: { role: Role }) {
   )
 }
 
+function HistoryRow({ change }: { change: AdminRoleChange }) {
+  return (
+    <div className="roles-history-row">
+      <span className={`roles-history-badge ${change.action === 'revoked' ? 'revoke' : 'grant'}`}>
+        {change.action === 'revoked' ? 'Thu hồi' : 'Cấp role'}
+      </span>
+      <span className="roles-history-main">
+        <strong>{ROLE_LABELS[change.role]}</strong>
+        <span className="mono" title={change.address}>
+          {shortAddress(change.address)}
+        </span>
+        <span className="roles-history-tx">
+          <ExplorerLink kind="tx" value={change.txHash} />
+        </span>
+      </span>
+      <span className="roles-history-time">{formatTime(change.at)}</span>
+    </div>
+  )
+}
+
 export function RolesPage() {
+  const { session } = useSession()
   const { showToast } = useToast()
-  const [rows, setRows] = useState<RoleRow[]>(INITIAL_ROWS)
-  const history = useRoleHistory()
+  const flow = useStepFlow()
+  const loadRoles = useCallback((signal: AbortSignal) => readAdminRoles(signal), [])
+  const { state, reload } = useAdminChain(loadRoles)
+
   const [query, setQuery] = useState('')
-  const [confirmRow, setConfirmRow] = useState<RoleRow | null>(null)
-  const [grantRow, setGrantRow] = useState<RoleRow | null>(null)
+  const [grantTarget, setGrantTarget] = useState<{ address: string } | null>(null)
   const [grantRole, setGrantRole] = useState<Role>('farmer')
-  const [progress, setProgress] = useState<ProgressState | null>(null)
+  const [grantError, setGrantError] = useState('')
+  const [revokeTarget, setRevokeTarget] = useState<AdminRoleHolder | null>(null)
+  const [revokeRole, setRevokeRole] = useState<Role>('farmer')
+  const [progress, setProgress] = useState<Operation | null>(null)
+
+  const holders = state.kind === 'ready' ? state.data.holders : []
+  const changes = state.kind === 'ready' ? state.data.changes : []
+
+  const term = query.trim().toLowerCase()
+  const filteredRows = holders.filter((holder) =>
+    `${holder.address} ${holder.roles.map((role) => ROLE_LABELS[role]).join(' ')}`
+      .toLowerCase()
+      .includes(term),
+  )
 
   async function copyText(text: string, message: string) {
     try {
@@ -253,184 +226,286 @@ export function RolesPage() {
     }
   }
 
-  const term = query.trim().toLowerCase()
-  const filteredRows = rows.filter((row) =>
-    `${row.name} ${row.address} ${row.role ? ROLE_LABELS[row.role] : ''}`
-      .toLowerCase()
-      .includes(term),
-  )
-
-  function startRevoke() {
-    if (!confirmRow?.role) return
-    setProgress({ action: 'revoke', row: confirmRow, role: confirmRow.role })
-    setConfirmRow(null)
-  }
-
-  function openGrant(row: RoleRow) {
+  function openGrant(address = '') {
     setGrantRole('farmer')
-    setGrantRow(row)
+    setGrantError('')
+    setGrantTarget({ address })
   }
 
   function startGrant() {
-    if (!grantRow) return
-    setProgress({ action: 'grant', row: grantRow, role: grantRole })
-    setGrantRow(null)
+    if (!grantTarget) return
+    const address = grantTarget.address.trim()
+    if (!isAddress(address)) {
+      setGrantError('Địa chỉ ví không hợp lệ (0x + 40 ký tự hex).')
+      return
+    }
+    const holder = holders.find((entry) => entry.address.toLowerCase() === address.toLowerCase())
+    if (holder?.roles.includes(grantRole)) {
+      setGrantError(`Ví này đã có role ${ROLE_LABELS[grantRole]}.`)
+      return
+    }
+    setGrantTarget(null)
+    setGrantError('')
+    void run({ action: 'grant', address: address as `0x${string}`, role: grantRole })
   }
 
-  function finishProgress() {
-    if (!progress) return
-    const { action, row, role } = progress
-    setRows((current) =>
-      current.map((item) =>
-        item.id === row.id
-          ? {
-              ...item,
-              role: action === 'revoke' ? null : role,
-              farmId: action === 'revoke' ? null : item.farmId,
-            }
-          : item,
-      ),
-    )
-    recordRoleChange({
-      action,
-      name: row.name,
-      role,
-    })
+  function openRevoke(holder: AdminRoleHolder) {
+    const options = holder.roles.filter((role) => role !== 'admin')
+    if (!options.length) return
+    setRevokeRole(options[0])
+    setRevokeTarget(holder)
+  }
+
+  function startRevoke() {
+    if (!revokeTarget) return
+    const target = revokeTarget
+    setRevokeTarget(null)
+    void run({ action: 'revoke', address: target.address, role: revokeRole })
+  }
+
+  async function run(operation: Operation) {
+    setProgress(operation)
+    flow.start()
+    try {
+      if (!session || session.source !== 'chain')
+        throw new TxError('precondition', 'Cần đăng nhập bằng ví thật để ký giao dịch.')
+      await sendTransaction(
+        session.wallet.address,
+        (contract) =>
+          operation.action === 'grant'
+            ? contract.grantRole(roleHash(operation.role), operation.address)
+            : contract.revokeRole(roleHash(operation.role), operation.address),
+        {
+          onSigning: () => flow.goTo(1),
+          onBroadcast: (hash) => {
+            flow.setTxHash(hash)
+            flow.goTo(3)
+          },
+        },
+      )
+      flow.goTo(4)
+      reload()
+      flow.succeed()
+      showToast(
+        `Đã ${operation.action === 'grant' ? 'cấp' : 'thu hồi'} role ${ROLE_LABELS[operation.role]} cho ${shortAddress(operation.address)}`,
+        'success',
+      )
+    } catch (error) {
+      if (error instanceof TxError) flow.fail(error.message, error.kind === 'rejected')
+      else flow.fail('Đã xảy ra lỗi không xác định. Vui lòng thử lại.')
+    }
+  }
+
+  function closeProgress() {
     setProgress(null)
+    flow.reset()
   }
 
   return (
     <div className="roles-page">
       <PageHeader
         title="Vai trò & quyền"
-        description="Role được ghi trên hợp đồng (grantRole/revokeRole). Người dùng không thể tự chọn hay đăng ký role."
+        description="Role đọc trực tiếp từ hợp đồng (hasRole). Cấp và thu hồi bằng grantRole/revokeRole, ký qua MetaMask. Người dùng không thể tự chọn role."
+        actions={
+          <Button type="button" onClick={() => openGrant()}>
+            Cấp role cho ví khác
+          </Button>
+        }
       />
 
-      <section className="roles-card" aria-label="Danh sách ví và vai trò">
-        <div className="roles-search">
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Tra cứu theo tên hoặc địa chỉ ví..."
-            aria-label="Tra cứu theo tên hoặc địa chỉ ví"
-          />
-        </div>
+      {state.kind === 'loading' && (
+        <section className="roles-card">
+          <LoadingState label="Đang đọc vai trò từ blockchain…" />
+        </section>
+      )}
 
-        <div className="roles-table-wrap">
-          <table className="roles-table">
-            <thead>
-              <tr>
-                <th>Ví</th>
-                <th>Địa chỉ</th>
-                <th>Role</th>
-                <th>FarmID</th>
-                <th>Hành động</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((row) => (
-                <tr key={row.id}>
-                  <td>
-                    <div className="roles-name">
-                      <strong>{row.name}</strong>
-                      {row.note && <span>{row.note}</span>}
-                    </div>
-                  </td>
-                  <td>
-                    <div className="roles-address">
-                      <span className="roles-address-line">
-                        <WalletIcon />
-                        <span className="mono">{shortAddress(row.address)}</span>
-                      </span>
-                      <button
-                        type="button"
-                        className="roles-copy"
-                        onClick={() => copyText(row.address, 'Đã sao chép địa chỉ ví')}
-                        aria-label={`Sao chép địa chỉ ${row.name}`}
-                        title="Sao chép địa chỉ ví"
-                      >
-                        <CopyIcon />
-                      </button>
-                    </div>
-                  </td>
-                  <td>
-                    {row.role ? (
-                      <RolePill role={row.role} />
-                    ) : (
-                      <span className="roles-role empty">
-                        <LockIcon />
-                        Chưa có role
-                      </span>
-                    )}
-                  </td>
-                  <td className="roles-farm">{row.farmId ?? '—'}</td>
-                  <td>
-                    {row.admin ? (
-                      <span className="roles-locked">Không thể thu hồi Admin</span>
-                    ) : row.role ? (
-                      <Button
-                        variant="secondary"
-                        className="roles-action"
-                        onClick={() => setConfirmRow(row)}
-                      >
-                        Thu hồi role
-                      </Button>
-                    ) : (
-                      <Button className="roles-action" onClick={() => openGrant(row)}>
-                        Cấp role
-                      </Button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-              {filteredRows.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="roles-empty">
-                    Không tìm thấy ví phù hợp.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      {state.kind === 'error' && (
+        <ErrorState
+          title="Không đọc được danh sách vai trò"
+          description={state.message}
+          action={
+            <Button type="button" onClick={reload}>
+              Thử lại
+            </Button>
+          }
+        />
+      )}
 
-      <section className="roles-history-section" aria-labelledby="roles-history-title">
-        <h2 id="roles-history-title">Lịch sử role</h2>
-        {history.length === 0 ? (
-          <div className="roles-history-empty">
-            <span className="roles-history-icon">
-              <ClockIcon />
-            </span>
-            <strong>Chưa có thay đổi role nào</strong>
-          </div>
-        ) : (
-          <div className="roles-history-list">
-            {history.map((entry) => (
-              <div className="roles-history-row" key={entry.id}>
-                <span className={`roles-history-badge ${entry.action}`}>
-                  {entry.action === 'revoke' ? 'Thu hồi' : 'Cấp role'}
+      {state.kind === 'ready' && (
+        <>
+          <section className="roles-card" aria-label="Danh sách ví và vai trò">
+            <div className="roles-search">
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Tra cứu theo địa chỉ ví hoặc role..."
+                aria-label="Tra cứu theo địa chỉ ví hoặc role"
+              />
+            </div>
+
+            <div className="roles-table-wrap">
+              <table className="roles-table">
+                <thead>
+                  <tr>
+                    <th>Ví</th>
+                    <th>Role</th>
+                    <th>FarmID</th>
+                    <th>Hành động</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRows.map((holder) => {
+                    const orderedRoles = ROLE_ORDER.filter((role) => holder.roles.includes(role))
+                    const revocable = orderedRoles.filter((role) => role !== 'admin')
+                    return (
+                      <tr key={holder.address}>
+                        <td>
+                          <div className="roles-address">
+                            <span className="roles-address-line">
+                              <WalletIcon />
+                              <span className="mono" title={holder.address}>
+                                {shortAddress(holder.address)}
+                              </span>
+                            </span>
+                            <button
+                              type="button"
+                              className="roles-copy"
+                              onClick={() => copyText(holder.address, 'Đã sao chép địa chỉ ví')}
+                              aria-label={`Sao chép địa chỉ ${holder.address}`}
+                              title="Sao chép địa chỉ ví"
+                            >
+                              <CopyIcon />
+                            </button>
+                          </div>
+                        </td>
+                        <td>
+                          <div className="roles-role-group">
+                            {orderedRoles.map((role) => (
+                              <RolePill key={role} role={role} />
+                            ))}
+                          </div>
+                        </td>
+                        <td className="roles-farm">{holder.farmId ?? '—'}</td>
+                        <td>
+                          <div className="roles-actions">
+                            <Button
+                              variant="secondary"
+                              className="roles-action"
+                              onClick={() => openGrant(holder.address)}
+                            >
+                              Cấp role
+                            </Button>
+                            {revocable.length > 0 && (
+                              <Button
+                                variant="danger"
+                                className="roles-action"
+                                onClick={() => openRevoke(holder)}
+                              >
+                                Thu hồi role
+                              </Button>
+                            )}
+                            {orderedRoles.includes('admin') && (
+                              <span className="roles-locked">Không thể thu hồi Admin</span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {filteredRows.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="roles-empty">
+                        Không tìm thấy ví phù hợp.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="roles-history-section" aria-labelledby="roles-history-title">
+            <h2 id="roles-history-title">Lịch sử role</h2>
+            <p className="roles-history-note">
+              Dựng từ event RoleGranted/RoleRevoked trên chain; vẫn đúng sau khi tải lại trang.
+            </p>
+            {changes.length === 0 ? (
+              <div className="roles-history-empty">
+                <span className="roles-history-icon">
+                  <ClockIcon />
                 </span>
-                <span className="roles-history-main">
-                  <strong>{entry.name}</strong>
-                  <span>{ROLE_LABELS[entry.role as Role]}</span>
-                </span>
-                <span className="roles-history-time">{formatEntryTime(entry)}</span>
+                <strong>Chưa có thay đổi role nào</strong>
               </div>
-            ))}
-          </div>
-        )}
-      </section>
+            ) : (
+              <div className="roles-history-list">
+                {changes.map((change) => (
+                  <HistoryRow key={`${change.txHash}-${change.logIndex}`} change={change} />
+                ))}
+              </div>
+            )}
+          </section>
+        </>
+      )}
 
       <Modal
-        open={!!confirmRow}
-        onClose={() => setConfirmRow(null)}
+        open={!!grantTarget}
+        onClose={() => setGrantTarget(null)}
+        title={`Cấp role cho ${grantTarget?.address ? shortAddress(grantTarget.address) : 'ví'}`}
+        className="roles-modal"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setGrantTarget(null)}>
+              Hủy
+            </Button>
+            <Button onClick={startGrant}>Xác nhận giao dịch</Button>
+          </>
+        }
+      >
+        <div className="roles-grant">
+          <label htmlFor="grant-address">Địa chỉ ví</label>
+          <input
+            id="grant-address"
+            className="mono"
+            value={grantTarget?.address ?? ''}
+            onChange={(event) => {
+              setGrantTarget({ address: event.target.value })
+              setGrantError('')
+            }}
+            placeholder="0x…"
+            autoFocus
+          />
+          {grantError && <span className="roles-form-error">{grantError}</span>}
+          <label htmlFor="grant-role">Role</label>
+          <select
+            id="grant-role"
+            value={grantRole}
+            onChange={(event) => {
+              setGrantRole(event.target.value as Role)
+              setGrantError('')
+            }}
+          >
+            {GRANTABLE_ROLES.map((role) => (
+              <option key={role} value={role}>
+                {ROLE_LABELS[role]}
+              </option>
+            ))}
+          </select>
+          <p>
+            Farmer cần được gán farmId ở mục Farmer ↔ farmId trước khi tạo được lô. Mọi thay đổi đều
+            phát event trên chain.
+          </p>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!revokeTarget}
+        onClose={() => setRevokeTarget(null)}
         title="Thu hồi role?"
         className="roles-modal roles-modal-confirm"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setConfirmRow(null)}>
+            <Button variant="secondary" onClick={() => setRevokeTarget(null)}>
               Hủy
             </Button>
             <Button variant="danger" onClick={startRevoke}>
@@ -439,65 +514,66 @@ export function RolesPage() {
           </>
         }
       >
-        <p className="roles-confirm-text">
-          Ví {confirmRow?.name} sẽ mất role {confirmRow?.role}. Yêu cầu chuyển đang chờ tới ví này
-          sẽ không thể chấp nhận.
-        </p>
-      </Modal>
-
-      <Modal
-        open={!!grantRow}
-        onClose={() => setGrantRow(null)}
-        title={`Cấp role cho ${grantRow?.name ?? ''}`}
-        className="roles-modal"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setGrantRow(null)}>
-              Hủy
-            </Button>
-            <Button onClick={startGrant}>Xác nhận giao dịch</Button>
-          </>
-        }
-      >
         <div className="roles-grant">
-          <label htmlFor="grant-role">Role</label>
-          <select
-            id="grant-role"
-            value={grantRole}
-            onChange={(event) => setGrantRole(event.target.value as Role)}
-          >
-            {GRANTABLE_ROLES.map((role) => (
-              <option key={role} value={role}>
-                {ROLE_LABELS[role]}
-              </option>
-            ))}
-          </select>
-          <p>Sau khi cấp, hãy gán farmId ở mục Farmer ↔ farmId để ví này tạo được lô.</p>
+          <p className="roles-confirm-text">
+            Ví <span className="mono">{revokeTarget?.address}</span> sẽ mất role được chọn. Thao tác
+            ghi tiếp theo của ví này sẽ bị hợp đồng chặn.
+          </p>
+          {revokeTarget && revokeTarget.roles.filter((role) => role !== 'admin').length > 1 ? (
+            <>
+              <label htmlFor="revoke-role">Role cần thu hồi</label>
+              <select
+                id="revoke-role"
+                value={revokeRole}
+                onChange={(event) => setRevokeRole(event.target.value as Role)}
+              >
+                {revokeTarget.roles
+                  .filter((role) => role !== 'admin')
+                  .map((role) => (
+                    <option key={role} value={role}>
+                      {ROLE_LABELS[role]}
+                    </option>
+                  ))}
+              </select>
+            </>
+          ) : (
+            <p className="roles-confirm-role">
+              Role: <RolePill role={revokeRole} />
+            </p>
+          )}
         </div>
       </Modal>
 
       <TxProgressModal
         open={!!progress}
-        onClose={() => setProgress(null)}
+        onClose={closeProgress}
         title={
-          progress?.action === 'revoke'
-            ? `Thu hồi role của ${progress.row.name}`
-            : `Cấp role cho ${progress?.row.name ?? ''}`
+          progress
+            ? `${progress.action === 'grant' ? 'Cấp' : 'Thu hồi'} role ${ROLE_LABELS[progress.role]}`
+            : 'Giao dịch role'
         }
-        method={progress?.action === 'revoke' ? 'revokeRole()' : 'grantRole()'}
+        method={
+          progress?.action === 'revoke' ? 'revokeRole(role, account)' : 'grantRole(role, account)'
+        }
         summary={
           progress
             ? [
-                { label: 'Ví', value: progress.row.name },
                 {
-                  label: progress.action === 'revoke' ? 'Role hiện tại' : 'Role sẽ cấp',
-                  value: ROLE_LABELS[progress.role],
+                  label: 'Ví',
+                  value: <span className="mono">{shortAddress(progress.address)}</span>,
                 },
+                { label: 'Role', value: ROLE_LABELS[progress.role] },
               ]
             : []
         }
-        txHash={TX_HASH}
-        onFinish={finishProgress}
+        steps={TX_STEPS}
+        flow={flow.state}
+        successNote={
+          progress
+            ? `Đã ${progress.action === 'grant' ? 'cấp' : 'thu hồi'} role ${ROLE_LABELS[progress.role]}. Danh sách bên dưới đã đọc lại từ contract.`
+            : undefined
+        }
+        onRetry={progress ? () => void run(progress) : undefined}
       />
     </div>
   )

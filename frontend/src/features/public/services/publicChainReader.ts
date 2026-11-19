@@ -19,6 +19,7 @@ import type {
   DemoEvent,
   DemoOwnership,
   DemoReading,
+  DemoRecall,
 } from '../mocks/traceDetailFixtures'
 
 export interface ProductionTraceIdentity {
@@ -141,7 +142,6 @@ async function fetchIpfsBytes(cid: string, signal: AbortSignal): Promise<Uint8Ar
 const cidOf = (uri: unknown): string | undefined =>
   typeof uri === 'string' && uri.startsWith('ipfs://') ? uri.slice('ipfs://'.length) : undefined
 
-
 /** Block đầu tiên có timestamp >= mốc (tìm nhị phân); lỗi RPC thì quét từ block deploy cho an toàn. */
 async function firstBlockAtOrAfter(
   provider: JsonRpcProvider,
@@ -194,7 +194,13 @@ async function readBatchFromChain(
   // Mọi sự kiện của lô xảy ra sau thời điểm thu hoạch (hợp đồng chặn harvestDate > block.timestamp),
   // nên chỉ cần quét từ block đầu tiên có timestamp >= harvestDate thay vì từ lúc deploy.
   const latest = await withDeadline(provider.getBlockNumber(), signal)
-  const from = await firstBlockAtOrAfter(provider, Number(onChain.harvestDate), config.deployBlock, latest, signal)
+  const from = await firstBlockAtOrAfter(
+    provider,
+    Number(onChain.harvestDate),
+    config.deployBlock,
+    latest,
+    signal,
+  )
   const logs = makeLogQuery(contract, from, latest, signal)
   const [created, accepted, transit, sold, incidents, recalledLogs, transfers] = await withDeadline(
     Promise.all([
@@ -239,6 +245,8 @@ async function readBatchFromChain(
   }
 
   const events: DemoEvent[] = []
+  const warnings: string[] = []
+  const chainHash = (hash: string) => hash.replace(/^0x/, '').toLowerCase()
   const push = async (
     log: Log,
     kind: DemoEvent['kind'],
@@ -255,7 +263,11 @@ async function readBatchFromChain(
     })
   for (const log of created) {
     const a = argsOf(log)
-    await push(log, 'BatchCreated', `${await label(String(a.farmer))} khởi tạo lô ${a.batchCode} và mint NFT.`)
+    await push(
+      log,
+      'BatchCreated',
+      `${await label(String(a.farmer))} khởi tạo lô ${a.batchCode} và mint NFT.`,
+    )
   }
   for (const log of accepted) {
     const a = argsOf(log)
@@ -269,7 +281,12 @@ async function readBatchFromChain(
     const a = argsOf(log)
     await push(log, 'TransitRecorded', `${Number(a.tempCenti) / 100}°C tại ${a.location}.`)
   }
-  for (const log of sold) await push(log, 'BatchSold', `Retailer ${shortAddress(String(argsOf(log).retailer))} đã bán lô.`)
+  for (const log of sold)
+    await push(
+      log,
+      'BatchSold',
+      `Retailer ${shortAddress(String(argsOf(log).retailer))} đã bán lô.`,
+    )
   for (const log of incidents) {
     const a = argsOf(log)
     const cid = cidOf(a.reportCID) ?? String(a.reportCID)
@@ -278,12 +295,102 @@ async function readBatchFromChain(
       url: ipfsFileUrl(cid),
     })
   }
+  // Lý do thu hồi: manifest JSON có CID ghi trên chain, đối chiếu SHA-256 trên đúng byte tải về.
+  // Lý do chỉ hiển thị khi manifest đúng schema và đúng lô/sự cố; PDF gốc cũng được đối chiếu hash.
+  const recalledLog = recalledLogs[recalledLogs.length - 1]
+  let recall: DemoRecall | undefined
+  if (recalledLog) {
+    const a = argsOf(recalledLog)
+    const reasonCid = cidOf(a.reasonCID) ?? String(a.reasonCID)
+    const reasonHash = chainHash(String(a.reasonHash))
+    const manifest: DemoDocument = {
+      name: 'recall-reason.json',
+      label: 'Manifest lý do thu hồi',
+      cid: reasonCid,
+      sha256: reasonHash,
+      fileUrl: ipfsFileUrl(reasonCid),
+      verified: 'unavailable',
+    }
+    let reasonText: string | undefined
+    let pdf: DemoDocument | undefined
+    const manifestBytes = await fetchIpfsBytes(reasonCid, signal)
+    if (manifestBytes) {
+      manifest.verified = (await sha256Hex(manifestBytes)) === reasonHash ? 'match' : 'mismatch'
+      const isPdf = new TextDecoder().decode(manifestBytes.slice(0, 5)) === '%PDF-'
+      if (manifest.verified !== 'match') {
+        warnings.push(
+          'SHA-256 của manifest lý do thu hồi KHÔNG khớp hash trên chain: không hiển thị lý do.',
+        )
+      } else if (isPdf) {
+        // Bản ghi cũ lưu thẳng PDF vào reasonCID: hash vẫn khớp chain nên hiển thị tệp gốc.
+        manifest.name = 'ly-do-thu-hoi.pdf'
+        manifest.label = 'PDF lý do thu hồi'
+        pdf = { ...manifest }
+      } else {
+        try {
+          const json = JSON.parse(new TextDecoder().decode(manifestBytes)) as Record<
+            string,
+            unknown
+          >
+          const pdfInfo =
+            json.pdf && typeof json.pdf === 'object' ? (json.pdf as Record<string, unknown>) : null
+          const validSchema =
+            json.kind === 'cocomark.recall-reason' &&
+            Number(json.version) === 1 &&
+            String(json.tokenId) === identity.tokenId &&
+            Number(json.incidentId) === Number(a.incidentId)
+          if (!validSchema) {
+            warnings.push(
+              'Manifest lý do thu hồi không đúng schema hoặc không khớp lô/sự cố ghi trên chain: không hiển thị lý do.',
+            )
+          } else {
+            if (typeof json.reasonText === 'string' && json.reasonText.trim())
+              reasonText = json.reasonText.trim()
+            if (pdfInfo && typeof pdfInfo.cid === 'string' && typeof pdfInfo.sha256 === 'string') {
+              const pdfCid = pdfInfo.cid
+              const declared = String(pdfInfo.sha256).toLowerCase()
+              const pdfBytes = await fetchIpfsBytes(pdfCid, signal)
+              const verified: DemoDocument['verified'] = pdfBytes
+                ? (await sha256Hex(pdfBytes)) === declared
+                  ? 'match'
+                  : 'mismatch'
+                : 'unavailable'
+              pdf = {
+                name: typeof pdfInfo.name === 'string' ? pdfInfo.name : 'ly-do-thu-hoi.pdf',
+                label: 'PDF lý do thu hồi',
+                cid: pdfCid,
+                sha256: declared,
+                fileUrl: ipfsFileUrl(pdfCid),
+                verified,
+              }
+            }
+          }
+        } catch {
+          warnings.push('Manifest lý do thu hồi không phải JSON hợp lệ: không hiển thị lý do.')
+        }
+      }
+    } else {
+      warnings.push('Không tải được manifest lý do thu hồi từ IPFS: chỉ hiển thị dữ liệu từ chain.')
+    }
+    recall = {
+      incidentId: Number(a.incidentId),
+      admin: await label(String(a.admin)),
+      at: await timeOf(recalledLog),
+      transactionHash: recalledLog.transactionHash,
+      reasonCid,
+      reasonHash,
+      manifest,
+      reasonText,
+      pdf,
+    }
+  }
+
   for (const log of recalledLogs) {
     const a = argsOf(log)
     const cid = cidOf(a.reasonCID) ?? String(a.reasonCID)
     await push(log, 'BatchRecalled', `Admin thu hồi lô theo sự cố #${a.incidentId}.`, {
-      label: 'Xem lý do thu hồi',
-      url: ipfsFileUrl(cid),
+      label: recall?.pdf ? 'Xem lý do thu hồi (PDF)' : 'Xem manifest lý do thu hồi',
+      url: recall?.pdf?.fileUrl ?? ipfsFileUrl(cid),
     })
   }
 
@@ -315,26 +422,31 @@ async function readBatchFromChain(
   readings.sort((x, y) => Date.parse(x.observedAt) - Date.parse(y.observedAt))
 
   // Metadata và hồ sơ công khai: tải qua gateway rồi băm SHA-256 trên byte gốc, đối chiếu hash trên chain
-  const warnings: string[] = []
   const metadataCid = tokenUri.startsWith('ipfs://') ? tokenUri.slice('ipfs://'.length) : tokenUri
-  const chainHash = (hash: string) => hash.replace(/^0x/, '').toLowerCase()
   let meta: Record<string, unknown> | null = null
   let metaVerified: DemoDocument['verified'] = 'unavailable'
   const metaBytes = await fetchIpfsBytes(metadataCid, signal)
   if (metaBytes) {
-    metaVerified = (await sha256Hex(metaBytes)) === chainHash(onChain.metadataHash) ? 'match' : 'mismatch'
+    metaVerified =
+      (await sha256Hex(metaBytes)) === chainHash(onChain.metadataHash) ? 'match' : 'mismatch'
     if (metaVerified === 'match') {
       try {
         meta = JSON.parse(new TextDecoder().decode(metaBytes))
       } catch {
         warnings.push('Metadata không phải JSON hợp lệ.')
       }
-    } else warnings.push('SHA-256 của metadata KHÔNG khớp hash trên chain: không dùng nội dung metadata này.')
+    } else
+      warnings.push(
+        'SHA-256 của metadata KHÔNG khớp hash trên chain: không dùng nội dung metadata này.',
+      )
   } else warnings.push('Không tải được metadata từ IPFS: chỉ hiển thị dữ liệu đọc từ hợp đồng.')
 
   const certificateCid = cidOf(meta?.certificateURI)
   const imageCid = cidOf(meta?.image)
-  const verifyFile = async (cid: string | undefined, expected: string): Promise<DemoDocument['verified']> => {
+  const verifyFile = async (
+    cid: string | undefined,
+    expected: string,
+  ): Promise<DemoDocument['verified']> => {
     if (!cid) return 'unavailable'
     const bytes = await fetchIpfsBytes(cid, signal)
     if (!bytes) return 'unavailable'
@@ -345,15 +457,40 @@ async function readBatchFromChain(
     verifyFile(imageCid, onChain.imageHash),
   ])
   const documents: DemoDocument[] = [
-    { name: 'certificate.pdf', label: 'Chứng chỉ PDF gốc', cid: certificateCid, sha256: chainHash(onChain.certificateHash), verified: certVerified, fileUrl: certificateCid ? ipfsFileUrl(certificateCid) : undefined },
-    { name: 'batch.jpg', label: 'Ảnh gốc của lô', cid: imageCid, sha256: chainHash(onChain.imageHash), verified: imageVerified, fileUrl: imageCid ? ipfsFileUrl(imageCid) : undefined },
-    { name: 'metadata.json', label: 'Metadata JSON công khai', cid: metadataCid, sha256: chainHash(onChain.metadataHash), verified: metaVerified, fileUrl: ipfsFileUrl(metadataCid) },
+    {
+      name: 'certificate.pdf',
+      label: 'Chứng chỉ PDF gốc',
+      cid: certificateCid,
+      sha256: chainHash(onChain.certificateHash),
+      verified: certVerified,
+      fileUrl: certificateCid ? ipfsFileUrl(certificateCid) : undefined,
+    },
+    {
+      name: 'batch.jpg',
+      label: 'Ảnh gốc của lô',
+      cid: imageCid,
+      sha256: chainHash(onChain.imageHash),
+      verified: imageVerified,
+      fileUrl: imageCid ? ipfsFileUrl(imageCid) : undefined,
+    },
+    {
+      name: 'metadata.json',
+      label: 'Metadata JSON công khai',
+      cid: metadataCid,
+      sha256: chainHash(onChain.metadataHash),
+      verified: metaVerified,
+      fileUrl: ipfsFileUrl(metadataCid),
+    },
   ]
   for (const d of documents) {
-    if (d.verified === 'mismatch' && d.name !== 'metadata.json') warnings.push(`SHA-256 của ${d.name} KHÔNG khớp hash trên chain.`)
+    if (d.verified === 'mismatch' && d.name !== 'metadata.json')
+      warnings.push(`SHA-256 của ${d.name} KHÔNG khớp hash trên chain.`)
   }
+  if (recall?.pdf?.verified === 'mismatch')
+    warnings.push('SHA-256 của PDF lý do thu hồi KHÔNG khớp hash khai báo trong manifest.')
 
-  const text = (key: string) => (typeof meta?.[key] === 'string' ? (meta[key] as string) : undefined)
+  const text = (key: string) =>
+    typeof meta?.[key] === 'string' ? (meta[key] as string) : undefined
   const num = (key: string) => (typeof meta?.[key] === 'number' ? (meta[key] as number) : undefined)
   const creator = created[0] ? String(argsOf(created[0]).farmer) : undefined
 
@@ -364,6 +501,7 @@ async function readBatchFromChain(
     harvestGroupId: onChain.harvestGroupId,
     lifecycle: LIFECYCLES[Number(onChain.lifecycle)] ?? 'Created',
     recalled: Boolean(onChain.recalled),
+    recall,
     owner: await label(owner),
     farmer: creator ? await label(creator) : 'Chưa có dữ liệu',
     quantityKg: 1000,
@@ -425,7 +563,9 @@ export async function inspectPublicChain(
 
 /** Mã lô mẫu của dữ liệu seed; chỉ có trên mạng local (Sepolia thật không có sẵn các mã này). */
 export const sampleBatchCodes: readonly string[] =
-  config.chainId === 31337 ? ['COCONUT-001', 'COCONUT-002', 'COCONUT-003', 'COCONUT-004', 'COCONUT-005', 'COCONUT-006'] : []
+  config.chainId === 31337
+    ? ['COCONUT-001', 'COCONUT-002', 'COCONUT-003', 'COCONUT-004', 'COCONUT-005', 'COCONUT-006']
+    : []
 
 export type TraceLookup =
   | { kind: 'found'; path: string }
