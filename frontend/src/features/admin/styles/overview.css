@@ -180,3 +180,15 @@
     width: auto;
   }
 }
+
+.overview-event-tx {
+  width: 150px;
+  white-space: nowrap;
+}
+
+.overview-event-tx a {
+  color: var(--forest);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

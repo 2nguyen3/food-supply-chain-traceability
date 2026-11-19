@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import type { TemperatureReading } from './batchFixtures'
+
+export interface ChartReading {
+  id: number
+  temperatureC: number
+  over: boolean
+}
 
 // Vẽ đúng 1:1 theo bề rộng container: chữ/nhãn giữ nguyên kích cỡ px,
 // không bị scale phóng to khi card rộng (nguyên nhân tràn chữ cũ).
@@ -8,7 +13,7 @@ export function TemperatureChart({
   min,
   max,
 }: {
-  readings: TemperatureReading[]
+  readings: ChartReading[]
   min: number
   max: number
 }) {

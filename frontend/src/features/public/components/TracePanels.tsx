@@ -297,7 +297,7 @@ function TechnicalField({
   )
 }
 
-export function TraceTechnicalPanel({ batch }: { batch: DemoBatch }) {
+export function TraceTechnicalPanel({ batch, showQr = true }: { batch: DemoBatch; showQr?: boolean }) {
   const threshold =
     batch.minTemperatureC !== undefined && batch.maxTemperatureC !== undefined
       ? `${batch.minTemperatureC}–${batch.maxTemperatureC}°C`
@@ -319,14 +319,14 @@ export function TraceTechnicalPanel({ batch }: { batch: DemoBatch }) {
         <TechnicalField label="Phân bón" value={batch.fertilizer} />
         <TechnicalField label="Ngưỡng nhiệt độ" value={threshold} />
       </dl>
-      <TraceQRCode
+      {showQr && <TraceQRCode
         code={batch.code}
         path={
           batch.source === 'chain' && batch.contractAddress
             ? `/trace/${batch.network?.split('· ')[1] ?? ''}/${batch.contractAddress}/${batch.tokenId}`
             : undefined
         }
-      />
+      />}
     </div>
   )
 }

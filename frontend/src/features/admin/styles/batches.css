@@ -1322,3 +1322,92 @@
     margin: 0 auto;
   }
 }
+
+.batch-status.expired {
+  background: #fff4e5;
+  color: #8a5a00;
+}
+
+.admin-metrics {
+  margin: 10px 4px 0;
+  color: var(--cocoa-soft);
+  font-size: 13px;
+}
+
+.batch-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.batch-action-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--sage);
+  color: var(--forest-dark);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.batch-action-done a {
+  color: inherit;
+}
+
+.batch-actions-note {
+  margin: 8px 0 0;
+  color: var(--cocoa-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.batch-warning.recall {
+  border-color: #f3b7b1;
+  background: #fff0ed;
+}
+
+.batch-warning.recall .batch-warning-icon {
+  color: var(--danger);
+}
+
+.batch-warning.ok {
+  border-color: #cfe3c1;
+  background: #f3f9ee;
+}
+
+.batch-warning.ok .batch-warning-icon {
+  color: var(--forest);
+}
+
+.batch-doc-missing {
+  color: var(--cocoa-soft);
+  font-size: 13.5px;
+}
+
+.batch-doc-check.match strong,
+.batch-doc-check.match span {
+  color: var(--forest-dark);
+}
+
+.batch-doc-check.mismatch strong,
+.batch-doc-check.mismatch span {
+  color: var(--danger);
+}
+
+.batch-doc-check.unavailable strong,
+.batch-doc-check.unavailable span {
+  color: #8a5a00;
+}
+
+.batch-qr-url {
+  margin: 0 0 14px;
+  color: var(--cocoa-soft);
+  font-size: 13.5px;
+}
+
+.batch-qr-url .mono {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}

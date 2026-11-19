@@ -76,7 +76,56 @@ export function TraceDetailView({ batch }: { batch: DemoBatch }) {
             <div>
               <strong>Đã thu hồi</strong>
               <p>Không tiếp tục sử dụng hoặc bán lô này; liên hệ nơi mua để được hướng dẫn.</p>
-              <small>Thu hồi không xóa trạng thái {batch.lifecycle} hay lịch sử NFT.</small>
+              {batch.recall?.reasonText && (
+                <p className="trace-recall-reason">
+                  <strong>Lý do thu hồi</strong>
+                  {batch.recall.reasonText}
+                </p>
+              )}
+              {batch.recall?.pdf && (
+                <p className="trace-recall-file">
+                  <a href={batch.recall.pdf.fileUrl} target="_blank" rel="noopener noreferrer">
+                    {batch.recall.pdf.label} · {batch.recall.pdf.name}
+                  </a>
+                  <span
+                    className={`trace-recall-verify ${batch.recall.pdf.verified ?? 'unavailable'}`}
+                  >
+                    {batch.recall.pdf.verified === 'match'
+                      ? 'SHA-256 khớp hash trong manifest'
+                      : batch.recall.pdf.verified === 'mismatch'
+                        ? 'SHA-256 KHÔNG khớp manifest'
+                        : 'Chưa đối chiếu được SHA-256'}
+                  </span>
+                </p>
+              )}
+              {batch.recall && !batch.recall.reasonText && batch.recall.pdf && (
+                <p className="trace-recall-missing">
+                  Lý do lưu trong tệp PDF gốc; mở tệp bên trên để đọc đầy đủ.
+                </p>
+              )}
+              {batch.recall && !batch.recall.reasonText && !batch.recall.pdf && (
+                <p className="trace-recall-missing">
+                  Chưa đọc được lý do dạng văn bản từ manifest trên IPFS.
+                  {batch.recall.manifest?.fileUrl && (
+                    <>
+                      {' '}
+                      <a
+                        href={batch.recall.manifest.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Mở manifest lý do thu hồi
+                      </a>
+                    </>
+                  )}
+                </p>
+              )}
+              <small>
+                Thu hồi không xóa trạng thái {batch.lifecycle} hay lịch sử NFT.
+                {batch.recall?.transactionHash
+                  ? ` Giao dịch: ${batch.recall.transactionHash}.`
+                  : ''}
+              </small>
             </div>
           </div>
         )}
