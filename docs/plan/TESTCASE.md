@@ -230,51 +230,51 @@ Trạng thái lô trong dữ liệu seed lúc dựng chain mới:
 
 ### Luồng LA. Tổng quan và lô đang giữ
 
-- [ ] **LG01** Đăng nhập ví Logistics vào `/logistics/overview`: lời chào đúng địa chỉ ví, không còn số liệu mẫu.
-- [ ] **LG02** Thẻ số liệu khớp contract: "Đang giữ" = 1 (COCONUT-003) nếu chưa nhận lô nào; "Chờ nhận" bằng số yêu cầu đang chờ gửi tới ví này.
-- [ ] **LG03** `/logistics/batches` chỉ có COCONUT-003; không có 001, 002, 004, 005, 006.
-- [ ] **LG04** Mở COCONUT-003: trạng thái InTransit, chủ sở hữu NFT là địa chỉ ví Logistics, hồ sơ công khai hiện đủ 3 thẻ và hash khớp.
-- [ ] **LG05** Tab nhiệt độ: biểu đồ 5 điểm, 1 điểm đỏ (18°C), vùng ngưỡng 8 đến 15°C, bảng 5 dòng có giờ block và txHash.
-- [ ] **LG06** Mở trang công khai của lô từ nút trên trang chi tiết: đúng lô.
+- [x] **LG01** Đăng nhập ví Logistics vào `/logistics/overview`: lời chào đúng địa chỉ ví, không còn số liệu mẫu.
+- [x] **LG02** Thẻ số liệu khớp contract: "Đang giữ" = 1 (COCONUT-003) nếu chưa nhận lô nào; "Chờ nhận" bằng số yêu cầu đang chờ gửi tới ví này.
+- [x] **LG03** `/logistics/batches` chỉ có COCONUT-003; không có 001, 002, 004, 005, 006.
+- [x] **LG04** Mở COCONUT-003: trạng thái InTransit, chủ sở hữu NFT là địa chỉ ví Logistics, hồ sơ công khai hiện đủ 3 thẻ và hash khớp.
+- [x] **LG05** Tab nhiệt độ: biểu đồ 5 điểm, 1 điểm đỏ (18°C), vùng ngưỡng 8 đến 15°C, bảng 5 dòng có giờ block và txHash.
+- [x] **LG06** Mở trang công khai của lô từ nút trên trang chi tiết: đúng lô.
 
 ### Luồng LB. Nhận hàng từ Farmer
 
 Điều kiện: ở luồng D của Farmer đã gửi yêu cầu bàn giao COCONUT-007 cho Logistics, và gửi thêm lô COCONUT-008 (dùng cho ca từ chối).
 
-- [ ] **LG07** `/logistics/incoming` hiện yêu cầu của COCONUT-007: Request ID, bên gửi Farmer A, thời gian theo giờ block.
-- [ ] **LG08** Mở yêu cầu: hệ thống lần lượt tải metadata.json, certificate.pdf, batch.jpg từ IPFS, tính SHA-256 và so với 3 hash lưu trên chain; hiện kết quả từng tệp.
-- [ ] **LG09** Cả 3 tệp khớp: nút "Nhận lô" bấm được.
-- [ ] **LG10** (Tùy chọn) Chặn hoặc ghi đè phản hồi tải chứng chỉ bằng DevTools (Network, Local overrides) để tải về khác byte gốc: hiện "không khớp", nút "Nhận lô" bị khóa.
-- [ ] **LG11** (Tùy chọn) Chặn hẳn yêu cầu tải IPFS: báo lỗi tải, không báo khớp giả, có nút tải lại.
-- [ ] **LG12** Bấm "Nhận lô", **từ chối** trong MetaMask: báo "Bạn đã từ chối ký", lô vẫn ở trạng thái chờ nhận.
-- [ ] **LG13** Bấm lại và xác nhận: khung tiến trình chạy hết, hiện txHash; lô COCONUT-007 chuyển sang InTransit, chủ sở hữu NFT là ví Logistics.
-- [ ] **LG14** COCONUT-007 biến khỏi "Chờ nhận", xuất hiện trong "Lô đang giữ"; Tổng quan: "Đang giữ" tăng 1.
-- [ ] **LG15** Đăng nhập Farmer A: yêu cầu của COCONUT-007 hiện "Đã nhận" ở `/farmer/transfers`, chủ sở hữu ở `/farmer/batches` là Logistics.
-- [ ] **LG16** Với COCONUT-008: bấm "Từ chối", xác nhận: yêu cầu thành "Đã từ chối", lô vẫn của Farmer A, hiện lại trong "Lô có thể chuyển" của Farmer A.
-- [ ] **LG17** Trang công khai của COCONUT-007: timeline có "Logistics đã nhận" kèm txHash, lịch sử sở hữu có thêm Logistics.
+- [x] **LG07** `/logistics/incoming` hiện yêu cầu của COCONUT-007: Request ID, bên gửi Farmer A, thời gian theo giờ block.
+- [x] **LG08** Mở yêu cầu: hệ thống lần lượt tải metadata.json, certificate.pdf, batch.jpg từ IPFS, tính SHA-256 và so với 3 hash lưu trên chain; hiện kết quả từng tệp.
+- [x] **LG09** Cả 3 tệp khớp: nút "Nhận lô" bấm được.
+- [x] **LG10** (Tùy chọn) Chặn hoặc ghi đè phản hồi tải chứng chỉ bằng DevTools (Network, Local overrides) để tải về khác byte gốc: hiện "không khớp", nút "Nhận lô" bị khóa.
+- [x] **LG11** (Tùy chọn) Chặn hẳn yêu cầu tải IPFS: báo lỗi tải, không báo khớp giả, có nút tải lại.
+- [x] **LG12** Bấm "Nhận lô", **từ chối** trong MetaMask: báo "Bạn đã từ chối ký", lô vẫn ở trạng thái chờ nhận.
+- [x] **LG13** Bấm lại và xác nhận: khung tiến trình chạy hết, hiện txHash; lô COCONUT-007 chuyển sang InTransit, chủ sở hữu NFT là ví Logistics.
+- [x] **LG14** COCONUT-007 biến khỏi "Chờ nhận", xuất hiện trong "Lô đang giữ"; Tổng quan: "Đang giữ" tăng 1.
+- [x] **LG15** Đăng nhập Farmer A: yêu cầu của COCONUT-007 hiện "Đã nhận" ở `/farmer/transfers`, chủ sở hữu ở `/farmer/batches` là Logistics.
+- [x] **LG16** Với COCONUT-008: bấm "Từ chối", xác nhận: yêu cầu thành "Đã từ chối", lô vẫn của Farmer A, hiện lại trong "Lô có thể chuyển" của Farmer A.
+- [x] **LG17** Trang công khai của COCONUT-007: timeline có "Logistics đã nhận" kèm txHash, lịch sử sở hữu có thêm Logistics.
 
 ### Luồng LC. Ghi nhiệt độ (lô đang giữ, trạng thái InTransit)
 
-- [ ] **LG18** Chi tiết COCONUT-003 có biểu mẫu ghi nhiệt độ (nhiệt độ °C, vị trí). Lô không phải InTransit hoặc không do ví này giữ thì biểu mẫu bị khóa kèm lý do.
-- [ ] **LG19** Nhập 12,5°C và vị trí, bấm ghi: MetaMask xác nhận; sau receipt, điểm mới xuất hiện trên biểu đồ và bảng (hiển thị 12,5°C, không phải 1250).
-- [ ] **LG20** Số `readingId` không trùng với 1 đến 5 đã dùng (hệ thống tự cấp số kế tiếp).
-- [ ] **LG21** Ghi 18°C hoặc 5°C: điểm đỏ, cảnh báo "ngoài ngưỡng 8 đến 15°C", không có chữ kết luận nhiễm khuẩn.
-- [ ] **LG22** Nhiệt độ rỗng hoặc không phải số: báo lỗi, không gửi giao dịch.
-- [ ] **LG23** **Từ chối** ký ở MetaMask: báo từ chối, không có điểm mới.
-- [ ] **LG24** Thử thao tác trên lô bị khóa (nếu có lô hết hạn hoặc thu hồi do Logistics giữ): nút bị khóa kèm lý do.
-- [ ] **LG25** Lịch sử readings sắp theo thời gian đo (observedAt), cho thấy giờ đo và giờ block khác nhau nếu có.
-- [ ] **LG26** Trang công khai của lô hiện điểm nhiệt độ mới sau khi tải lại.
+- [x] **LG18** Chi tiết COCONUT-003 có biểu mẫu ghi nhiệt độ (nhiệt độ °C, vị trí). Lô không phải InTransit hoặc không do ví này giữ thì biểu mẫu bị khóa kèm lý do.
+- [x] **LG19** Nhập 12,5°C và vị trí, bấm ghi: MetaMask xác nhận; sau receipt, điểm mới xuất hiện trên biểu đồ và bảng (hiển thị 12,5°C, không phải 1250).
+- [x] **LG20** Số `readingId` không trùng với 1 đến 5 đã dùng (hệ thống tự cấp số kế tiếp).
+- [x] **LG21** Ghi 18°C hoặc 5°C: điểm đỏ, cảnh báo "ngoài ngưỡng 8 đến 15°C", không có chữ kết luận nhiễm khuẩn.
+- [x] **LG22** Nhiệt độ rỗng hoặc không phải số: báo lỗi, không gửi giao dịch.
+- [x] **LG23** **Từ chối** ký ở MetaMask: báo từ chối, không có điểm mới.
+- [x] **LG24** Thử thao tác trên lô bị khóa (nếu có lô hết hạn hoặc thu hồi do Logistics giữ): nút bị khóa kèm lý do.
+- [x] **LG25** Lịch sử readings sắp theo thời gian đo (observedAt), cho thấy giờ đo và giờ block khác nhau nếu có.
+- [x] **LG26** Trang công khai của lô hiện điểm nhiệt độ mới sau khi tải lại.
 
 ### Luồng LD. Bàn giao cho Retailer
 
 Dùng lô COCONUT-007 (đã nhận ở LB).
 
-- [ ] **LG27** `/logistics/outgoing`: mục "Lô có thể chuyển" chỉ có lô đang giữ, đang InTransit, chưa hết hạn, chưa thu hồi (COCONUT-003 và 007).
-- [ ] **LG28** "Yêu cầu chuyển cho Retailer": hộp chọn người nhận hiện danh sách ví Retailer đọc từ hợp đồng (có `0x15d3…6A65`); không có ví Farmer hay Logistics.
-- [ ] **LG29** Gửi yêu cầu, xác nhận trong MetaMask: lô vào "Yêu cầu đang chờ", biến khỏi "Lô có thể chuyển"; chủ sở hữu NFT vẫn là Logistics.
-- [ ] **LG30** Một lô chỉ có một yêu cầu hoạt động: lô đang chờ không thể gửi thêm.
-- [ ] **LG31** **Từ chối** ký giao dịch yêu cầu: báo từ chối, không có yêu cầu mới.
-- [ ] **LG32** "Hủy yêu cầu" xác nhận: trạng thái "Đã hủy", lô quay lại "Lô có thể chuyển"; gửi lại được.
+- [x] **LG27** `/logistics/outgoing`: mục "Lô có thể chuyển" chỉ có lô đang giữ, đang InTransit, chưa hết hạn, chưa thu hồi (COCONUT-003 và 007).
+- [x] **LG28** "Yêu cầu chuyển cho Retailer": hộp chọn người nhận hiện danh sách ví Retailer đọc từ hợp đồng (có `0x15d3…6A65`); không có ví Farmer hay Logistics.
+- [x] **LG29** Gửi yêu cầu, xác nhận trong MetaMask: lô vào "Yêu cầu đang chờ", biến khỏi "Lô có thể chuyển"; chủ sở hữu NFT vẫn là Logistics.
+- [x] **LG30** Một lô chỉ có một yêu cầu hoạt động: lô đang chờ không thể gửi thêm.
+- [x] **LG31** **Từ chối** ký giao dịch yêu cầu: báo từ chối, không có yêu cầu mới.
+- [x] **LG32** "Hủy yêu cầu" xác nhận: trạng thái "Đã hủy", lô quay lại "Lô có thể chuyển"; gửi lại được.
 - [ ] **LG33** Sau khi Retailer nhận (luồng RB): yêu cầu thành "Đã nhận", lô biến khỏi "Lô đang giữ".
 - [ ] **LG34** Sau khi Retailer từ chối: yêu cầu thành "Đã từ chối", lô vẫn của Logistics.
 

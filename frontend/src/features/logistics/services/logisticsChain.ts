@@ -250,6 +250,8 @@ export async function readLogisticsSnapshot(
         }
 
         allRelevantBatches.set(batch.code, batch)
+        allRelevantBatches.set(batch.code.toUpperCase(), batch)
+        allRelevantBatches.set(batch.tokenId, batch)
         if (ownedByMe) ownedBatches.push(batch)
         if (isIncomingToMe) incomingPending.push(batch)
         if (isOutgoingFromMe) outgoingPending.push(batch)
@@ -359,6 +361,7 @@ export async function verifyBatchIpfsFiles(batch: LogisticsBatch): Promise<{
     })
     metadataJson = JSON.parse(new TextDecoder().decode(metaBuf)) as Record<string, unknown>
     const rawCert =
+      (metadataJson.certificateURI as string | undefined) ??
       (metadataJson.certificate as string | undefined) ??
       (metadataJson.certificate_cid as string | undefined) ??
       ''
