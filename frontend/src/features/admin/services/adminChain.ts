@@ -366,11 +366,12 @@ async function buildBatchRows(
     createdLogs.map(async (log) => {
       const a = argsOf(log)
       const tokenId = BigInt(String(a.tokenId))
-      const [info, owner, expired] = await Promise.all([
+      const [info, owner, chainExpired] = await Promise.all([
         ctx.call(ctx.contract.getBatch(tokenId)),
         ctx.call(ctx.contract.ownerOf(tokenId)),
         ctx.call(ctx.contract.isExpired(tokenId)),
       ])
+      const expiryIso = toIso(info.expiryDate)
       const row: AdminBatchRow = {
         tokenId: tokenId.toString(),
         batchCode: String(info.batchCode),
@@ -379,10 +380,13 @@ async function buildBatchRows(
         farmLocation: String(info.farmLocation),
         lifecycle: LIFECYCLES[Number(info.lifecycle)] ?? 'Created',
         recalled: Boolean(info.recalled),
-        expired: Boolean(expired),
+        // Ưu tiên isExpired on-chain; bổ sung so sánh hạn sử dụng (cũng đọc từ chain)
+        // với đồng hồ thật để không lệch với trang trace/retailer/farmer. Trên Hardhat,
+        // block.timestamp đứng yên khi không có giao dịch nên isExpired có thể trễ.
+        expired: Boolean(chainExpired) || Date.parse(expiryIso) <= Date.now(),
         quantityKg: Number(info.quantityKg),
         harvestDate: toIso(info.harvestDate),
-        expiryDate: toIso(info.expiryDate),
+        expiryDate: expiryIso,
         owner: asAddress(String(owner)),
         farmer: a.farmer ? asAddress(String(a.farmer)) : null,
         createdAt: await ctx.timeOf(log.blockNumber),
