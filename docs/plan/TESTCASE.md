@@ -275,15 +275,15 @@ Dùng lô COCONUT-007 (đã nhận ở LB).
 - [x] **LG30** Một lô chỉ có một yêu cầu hoạt động: lô đang chờ không thể gửi thêm.
 - [x] **LG31** **Từ chối** ký giao dịch yêu cầu: báo từ chối, không có yêu cầu mới.
 - [x] **LG32** "Hủy yêu cầu" xác nhận: trạng thái "Đã hủy", lô quay lại "Lô có thể chuyển"; gửi lại được.
-- [ ] **LG33** Sau khi Retailer nhận (luồng RB): yêu cầu thành "Đã nhận", lô biến khỏi "Lô đang giữ".
-- [ ] **LG34** Sau khi Retailer từ chối: yêu cầu thành "Đã từ chối", lô vẫn của Logistics.
+- [x] **LG33** Sau khi Retailer nhận (luồng RB): yêu cầu thành "Đã nhận", lô biến khỏi "Lô đang giữ".
+- [x] **LG34** Sau khi Retailer từ chối: yêu cầu thành "Đã từ chối", lô vẫn của Logistics.
 
 ### Luồng LE. Quyền và cách ly
 
-- [ ] **LG35** Đăng nhập **Farmer A** rồi gõ tay `/logistics/overview`: bị chặn (không đủ quyền), không thấy dữ liệu Logistics.
-- [ ] **LG36** Đăng nhập **Retailer** rồi gõ tay `/logistics/incoming`: bị chặn.
-- [ ] **LG37** Mở tay `/logistics/batches/COCONUT-001` (lô đã chuyển cho Retailer): báo không tìm thấy lô của ví này.
-- [ ] **LG38** F5 ở một trang Logistics: vẫn đăng nhập, vẫn ở đúng trang.
+- [x] **LG35** Đăng nhập **Farmer A** rồi gõ tay `/logistics/overview`: bị chặn (không đủ quyền), không thấy dữ liệu Logistics.
+- [x] **LG36** Đăng nhập **Retailer** rồi gõ tay `/logistics/incoming`: bị chặn.
+- [x] **LG37** Mở tay `/logistics/batches/COCONUT-001` (lô đã chuyển cho Retailer): báo không tìm thấy lô của ví này.
+- [x] **LG38** F5 ở một trang Logistics: vẫn đăng nhập, vẫn ở đúng trang.
 
 ---
 
