@@ -1,38 +1,43 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { QRCodeCanvas } from 'qrcode.react'
-import { Button, Modal, PageHeader } from '../../components/ui'
+import { Button, ErrorState, LoadingState, PageHeader } from '../../components/ui'
 import { useToast } from '../../components/ui/toast'
-import type { Lifecycle } from '../../domain/types'
+import { config, networkName } from '../../config/env'
+import type { Lifecycle, Role } from '../../domain/types'
+import { ExplorerLink } from '../public/components/ExplorerLink'
 import {
-  getBatchDetail,
-  JOURNEY_EVENTS,
+  formatDate,
+  formatTime,
   LIFECYCLE_LABELS,
   LIFECYCLE_PILL,
-  METADATA_JSON,
-  NFT_TRANSFERS,
-  PUBLIC_DOCUMENTS,
-  QR_DEMO_PATH,
-  QR_TECHNICAL,
-  READINGS,
-  type BatchDetail,
-  type PublicDocument,
-} from './batchFixtures'
-import { useRecalls } from './incidentStore'
-import { INCIDENTS } from './incidentFixtures'
-import { TemperatureChart } from './TemperatureChart'
+  shortAddress,
+  shortHash,
+} from './format'
+import { useAdminChain } from './hooks/useAdminChain'
+import {
+  readAdminBatchDetail,
+  type AdminBatchDetail,
+  type AdminBatchRow,
+  type AdminIncidentRow,
+  type AdminOwnershipStep,
+  type AdminReading,
+} from './services/adminChain'
+import { TemperatureChart, type ChartReading } from './TemperatureChart'
 import './styles/batches.css'
 
-type TabId = 'overview' | 'public' | 'private' | 'temperature' | 'journey' | 'qr'
+type TabId = 'overview' | 'public' | 'temperature' | 'journey' | 'qr'
 
 const STEPS: Lifecycle[] = ['Created', 'InTransit', 'Delivered', 'Sold']
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+const DEFAULT_TEMP_MIN = 8
+const DEFAULT_TEMP_MAX = 15
 
-function shortAddress(address: string): string {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`
-}
-
-function shortHash(hash: string): string {
-  return `${hash.slice(0, 8)}...${hash.slice(-6)}`
+const ROLE_NAMES: Record<Role, string> = {
+  admin: 'Admin',
+  farmer: 'Farmer',
+  logistics: 'Logistics',
+  retailer: 'Retailer',
 }
 
 function CopyIcon() {
@@ -77,9 +82,9 @@ function CheckIcon() {
   )
 }
 
-function AlertIcon() {
+function AlertIcon({ size = 20 }: { size?: number }) {
   return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
         d="M12 3.5 2.8 20h18.4L12 3.5Z"
         stroke="currentColor"
@@ -100,25 +105,11 @@ function InfoIcon() {
   )
 }
 
-function EyeIcon() {
+function ExternalIcon() {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
-        d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinejoin="round"
-      />
-      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.7" />
-    </svg>
-  )
-}
-
-function DownloadIcon() {
-  return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path
-        d="M12 4v10m0 0 4-4m-4 4-4-4M4 18v2h16v-2"
+        d="M14 4h6v6M20 4l-8 8M9 5H5v14h14v-4"
         stroke="currentColor"
         strokeWidth="1.7"
         strokeLinecap="round"
@@ -128,11 +119,11 @@ function DownloadIcon() {
   )
 }
 
-function ExternalIcon() {
+function DownloadIcon() {
   return (
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <path
-        d="M14 4h6v6M20 4l-8 8M9 5H5v14h14v-4"
+        d="M12 4v10m0 0 4-4m-4 4-4-4M4 18v2h16v-2"
         stroke="currentColor"
         strokeWidth="1.7"
         strokeLinecap="round"
@@ -156,24 +147,11 @@ function FlagIcon() {
   )
 }
 
-function LockIcon() {
+function BanIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <rect
-        x="4.5"
-        y="10"
-        width="15"
-        height="10.5"
-        rx="2.2"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      />
-      <path
-        d="M8 10V7.5a4 4 0 0 1 8 0V10"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="m6 18.5 11.5-13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   )
 }
@@ -298,27 +276,6 @@ function QrIcon() {
   )
 }
 
-function ChevronIcon({ open }: { open: boolean }) {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-      className={open ? 'open' : ''}
-    >
-      <path
-        d="m6 9 6 6 6-6"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
 function CopyButton({ text, message }: { text: string; message: string }) {
   const { showToast } = useToast()
 
@@ -353,186 +310,127 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function CertificatePreview({ detail }: { detail: BatchDetail }) {
-  return (
-    <div className="cert-preview">
-      <div className="cert-sheet">
-        <img className="cert-logo" src="/brand/Primary.svg" width="76" height="76" alt="" />
-        <p className="cert-brand">COCOMARK</p>
-        <h3>Giấy chứng nhận lô dừa</h3>
-        <p className="cert-sub">Số {detail.code} · Mẫu cho prototype</p>
-        <dl className="cert-rows">
-          <div>
-            <dt>Trang trại</dt>
-            <dd>
-              {detail.farmId} · {detail.farmLocation}
-            </dd>
-          </div>
-          <div>
-            <dt>Nhóm thu hoạch</dt>
-            <dd>{detail.groupId}</dd>
-          </div>
-          <div>
-            <dt>Giống</dt>
-            <dd>{detail.variety}</dd>
-          </div>
-          <div>
-            <dt>Khối lượng</dt>
-            <dd>{detail.weightKg.toLocaleString('vi-VN')} kg</dd>
-          </div>
-          <div>
-            <dt>Thu hoạch</dt>
-            <dd>{detail.harvestDate}</dd>
-          </div>
-        </dl>
-        <p className="cert-note">
-          Đây là bản xem trước trong ứng dụng. Tệp PDF mẫu: <strong>certificate.pdf</strong>{' '}
-          (fixture). Không phải chứng chỉ thật.
-        </p>
-      </div>
-    </div>
-  )
+function partyText(address: string, labels: Record<string, Role[]>): string {
+  if (address === ZERO_ADDRESS) return 'Hệ thống'
+  const roles = labels[address] ?? []
+  const role = roles.length ? `${roles.map((item) => ROLE_NAMES[item]).join(' / ')} · ` : ''
+  return `${role}${shortAddress(address)}`
 }
 
-function BatchImagePreview({ code }: { code: string }) {
-  return (
-    <figure className="batch-image-figure">
-      <svg
-        viewBox="0 0 1000 560"
-        className="batch-image-preview"
-        role="img"
-        aria-label={`Ảnh gốc của lô ${code}`}
-      >
-        <defs>
-          <linearGradient id="batch-photo-bg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#dfeacb" />
-            <stop offset="100%" stopColor="#b9d3a4" />
-          </linearGradient>
-          <radialGradient id="coconut-shade" cx="35%" cy="30%" r="75%">
-            <stop offset="0%" stopColor="#9b6a3d" />
-            <stop offset="100%" stopColor="#5d3a1d" />
-          </radialGradient>
-        </defs>
-        <rect width="1000" height="560" fill="url(#batch-photo-bg)" />
-        <path d="M0 430c160-50 320-70 500-40s340 10 500-30v200H0Z" fill="#8fb277" />
-        <g opacity="0.75" fill="#2d6a4f">
-          <path d="M120 300c90-120 240-150 330-90-110 10-220 50-330 90Z" />
-          <path d="M880 290c-80-125-230-160-325-105 110 15 215 60 325 105Z" />
-        </g>
-        <g>
-          <ellipse cx="360" cy="390" rx="96" ry="86" fill="url(#coconut-shade)" />
-          <ellipse cx="520" cy="410" rx="104" ry="92" fill="url(#coconut-shade)" />
-          <ellipse cx="680" cy="392" rx="94" ry="84" fill="url(#coconut-shade)" />
-          <ellipse cx="440" cy="300" rx="86" ry="78" fill="url(#coconut-shade)" />
-          <ellipse cx="600" cy="296" rx="88" ry="80" fill="url(#coconut-shade)" />
-          <g fill="#3f2611">
-            <circle cx="430" cy="292" r="8" />
-            <circle cx="448" cy="286" r="7" />
-            <circle cx="452" cy="304" r="7" />
-            <circle cx="590" cy="288" r="8" />
-            <circle cx="608" cy="282" r="7" />
-            <circle cx="612" cy="300" r="7" />
-          </g>
-        </g>
-        <rect x="300" y="470" width="400" height="34" rx="17" fill="#6f4a2a" opacity="0.75" />
-        <text x="500" y="494" textAnchor="middle" fill="#fff3e5" fontSize="18" fontWeight="600">
-          COCOMARK · {code} · FARM-A
-        </text>
-      </svg>
-      <figcaption>Ảnh minh họa fixture cho lô {code}.</figcaption>
-    </figure>
-  )
+type JourneyKind = 'mint' | 'transfer' | 'reading' | 'sold' | 'incident' | 'recall'
+
+interface JourneyItem {
+  id: string
+  kind: JourneyKind
+  title: string
+  description: string
+  time: string
+  txHash: string
 }
 
-function downloadFile(name: string, content: string, type: string) {
-  const blob = new Blob([content], { type })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = name
-  document.body.appendChild(anchor)
-  anchor.click()
-  anchor.remove()
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+function journeyOf(
+  ownership: AdminOwnershipStep[],
+  readings: AdminReading[],
+  detail: AdminBatchDetail,
+  batchIncidents: AdminIncidentRow[],
+): JourneyItem[] {
+  const items: JourneyItem[] = []
+  const labels = detail.roleLabels
+  for (const step of ownership) {
+    items.push({
+      id: `transfer-${step.txHash}`,
+      kind: step.kind === 'mint' ? 'mint' : 'transfer',
+      title: step.kind === 'mint' ? 'Mint NFT' : 'Bàn giao',
+      description: `${partyText(step.from, labels)} → ${partyText(step.to, labels)}`,
+      time: step.at,
+      txHash: step.txHash,
+    })
+  }
+  for (const reading of readings) {
+    items.push({
+      id: `reading-${reading.readingId}`,
+      kind: 'reading',
+      title: 'Ghi nhận nhiệt độ',
+      description: `${reading.temperatureC.toFixed(2)}°C tại ${reading.location} · quan sát ${formatTime(reading.observedAt)}`,
+      time: reading.at,
+      txHash: reading.txHash,
+    })
+  }
+  if (detail.sold) {
+    items.push({
+      id: `sold-${detail.sold.txHash}`,
+      kind: 'sold',
+      title: 'Bán lô',
+      description: `${partyText(detail.sold.retailer, labels)} đã bán lô.`,
+      time: detail.sold.at,
+      txHash: detail.sold.txHash,
+    })
+  }
+  for (const incident of batchIncidents) {
+    if (!incident.txHash) continue
+    items.push({
+      id: `incident-${incident.incidentId}`,
+      kind: 'incident',
+      title: 'Báo cáo sự cố',
+      description: `${partyText(incident.reporter, labels)} báo cáo sự cố #${incident.incidentId}.`,
+      time: incident.reportedAt,
+      txHash: incident.txHash,
+    })
+  }
+  if (detail.batch.recall) {
+    items.push({
+      id: `recall-${detail.batch.recall.txHash}`,
+      kind: 'recall',
+      title: 'Thu hồi lô',
+      description: `${partyText(detail.batch.recall.admin, labels)} thu hồi theo sự cố #${detail.batch.recall.incidentId}.`,
+      time: detail.batch.recall.at,
+      txHash: detail.batch.recall.txHash,
+    })
+  }
+  items.sort((x, y) => Date.parse(x.time) - Date.parse(y.time))
+  return items
+}
+
+function verifyText(verified: 'match' | 'mismatch' | 'unavailable'): string {
+  if (verified === 'match') return 'SHA-256 khớp hash trên chain'
+  if (verified === 'mismatch') return 'SHA-256 KHÔNG khớp hash trên chain'
+  return 'Chưa tải được tệp để đối chiếu'
 }
 
 export function BatchDetailPage() {
   const { code = '' } = useParams()
-  const detail = getBatchDetail(code)
   const { showToast } = useToast()
+  const loadDetail = useCallback(
+    (signal: AbortSignal) => readAdminBatchDetail(code, signal),
+    [code],
+  )
+  const { state, reload } = useAdminChain(loadDetail)
   const [tab, setTab] = useState<TabId>('overview')
-  const [docModal, setDocModal] = useState<PublicDocument | null>(null)
-  const [techOpen, setTechOpen] = useState(false)
   const qrRef = useRef<HTMLDivElement>(null)
   const tabsRef = useRef<HTMLDivElement>(null)
-  const recalls = useRecalls()
 
-  if (!detail) {
-    return (
-      <div className="batches-page">
-        <PageHeader
-          title="Không tìm thấy lô"
-          description="Mã lô không tồn tại trong dữ liệu demo."
-          crumbs={[{ label: 'Lô hàng', to: '/admin/batches' }]}
-        />
-        <Link className="button" to="/admin/batches">
-          Quay lại danh sách lô
-        </Link>
-      </div>
-    )
-  }
-
-  const currentIndex = STEPS.indexOf(detail.lifecycle)
-  const readings = detail.code === 'COCONUT-001' ? READINGS : []
-  const overReading = readings.find((reading) => reading.over)
-  const qrUrl = `${window.location.origin}${QR_DEMO_PATH}`
-  const recall = recalls[detail.code]
-
-  const journey = JOURNEY_EVENTS.filter((event) => {
-    if (event.id === 'mint') return true
-    if (event.id === 'handoff-logistics') return currentIndex >= 1
-    if (event.id.startsWith('reading-')) return detail.code === 'COCONUT-001' && currentIndex >= 1
-    if (event.id === 'handoff-retailer') return currentIndex >= 2
-    if (event.id === 'sold') return currentIndex >= 3
-    return true
-  })
-
-  const incident = INCIDENTS.find((incident) => incident.batchCode === detail.code)
-  if (incident) {
-    journey.push({
-      id: `incident-${incident.id}`,
-      kind: 'incident',
-      title: 'Báo cáo sự cố',
-      description: `${incident.reporter} báo cáo sự cố ${incident.id}`,
-      time: incident.time,
-      txHash: incident.reportTx,
-    })
-  }
-  if (recall) {
-    journey.push({
-      id: `recall-${recall.batchCode}`,
-      kind: 'recall',
-      title: 'Thu hồi lô',
-      description: `Thu hồi lô do sự cố ${recall.incidentId}. Lý do: ${recall.reason}`,
-      time: recall.time,
-      txHash: recall.txHash,
-    })
-  }
-
-  const transfers = NFT_TRANSFERS.filter((transfer) => {
-    if (transfer.id === 1) return true
-    if (transfer.id === 2) return currentIndex >= 1
-    return currentIndex >= 2
-  })
-
-  const tabs: { id: TabId; label: string; icon: ReactNode }[] = [
-    { id: 'overview', label: 'Tổng quan', icon: <BoxIcon /> },
-    { id: 'public', label: 'Tài liệu công khai', icon: <FileIcon /> },
-    { id: 'private', label: 'Tài liệu riêng', icon: <LockIcon /> },
-    { id: 'temperature', label: 'Nhiệt độ', icon: <ThermometerIcon /> },
-    { id: 'journey', label: 'Hành trình & NFT', icon: <RouteIcon /> },
-    { id: 'qr', label: 'QR', icon: <QrIcon /> },
-  ]
+  const detail = state.kind === 'ready' ? state.data : null
+  const batch: AdminBatchRow | null = detail?.batch ?? null
+  const batchIncidents = useMemo(
+    () => (detail?.incidents ?? []).filter((row) => row.tokenId === detail?.batch.tokenId),
+    [detail],
+  )
+  const readings = useMemo(() => detail?.readings ?? [], [detail])
+  const tempMin = detail?.tempMin ?? DEFAULT_TEMP_MIN
+  const tempMax = detail?.tempMax ?? DEFAULT_TEMP_MAX
+  const chartReadings: ChartReading[] = useMemo(
+    () =>
+      readings.map((reading) => ({
+        id: reading.readingId,
+        temperatureC: reading.temperatureC,
+        over: reading.temperatureC < tempMin || reading.temperatureC > tempMax,
+      })),
+    [readings, tempMin, tempMax],
+  )
+  const journey = useMemo(
+    () => (detail && batch ? journeyOf(detail.ownership, readings, detail, batchIncidents) : []),
+    [detail, batch, readings, batchIncidents],
+  )
 
   async function copyText(text: string, message: string) {
     try {
@@ -543,14 +441,67 @@ export function BatchDetailPage() {
     }
   }
 
+  if (state.kind === 'loading') {
+    return (
+      <div className="batches-page">
+        <LoadingState label={`Đang đọc lô ${code} từ blockchain…`} />
+      </div>
+    )
+  }
+
+  if (state.kind === 'error') {
+    return (
+      <div className="batches-page">
+        <PageHeader
+          title={
+            state.message.includes('Không tìm thấy') ? 'Không tìm thấy lô' : 'Không đọc được lô'
+          }
+          crumbs={[{ label: 'Lô hàng', to: '/admin/batches' }]}
+        />
+        <ErrorState
+          title="Không mở được chi tiết lô"
+          description={state.message}
+          action={
+            <div className="batch-error-actions">
+              <Button type="button" onClick={reload}>
+                Thử lại
+              </Button>
+              <Link className="button secondary" to="/admin/batches">
+                Quay lại danh sách lô
+              </Link>
+            </div>
+          }
+        />
+      </div>
+    )
+  }
+
+  if (!detail || !batch) return null
+
+  const currentIndex = STEPS.indexOf(batch.lifecycle)
+  const qrUrl = `${window.location.origin}/trace/${config.chainId}/${config.contractAddress}/${batch.tokenId}`
+  const referenceIncident =
+    batchIncidents[0] ?? detail.incidents[detail.incidents.length - 1] ?? null
+  const overReadings = chartReadings.filter((reading) => reading.over)
+  const maxTemp = readings.length
+    ? Math.max(...readings.map((reading) => reading.temperatureC))
+    : null
+
+  const tabs: { id: TabId; label: string; icon: ReactNode }[] = [
+    { id: 'overview', label: 'Tổng quan', icon: <BoxIcon /> },
+    { id: 'public', label: 'Tài liệu công khai', icon: <FileIcon /> },
+    { id: 'temperature', label: 'Nhiệt độ', icon: <ThermometerIcon /> },
+    { id: 'journey', label: 'Hành trình & NFT', icon: <RouteIcon /> },
+    { id: 'qr', label: 'QR', icon: <QrIcon /> },
+  ]
+
   function downloadQr() {
-    if (!detail) return
     const canvas = qrRef.current?.querySelector('canvas')
     if (!canvas) {
       showToast('Không thể tạo ảnh QR', 'error')
       return
     }
-    const fileName = `${detail.code}-qr.png`
+    const fileName = `${batch!.batchCode}-qr.png`
     const save = (href: string) => {
       const anchor = document.createElement('a')
       anchor.href = href
@@ -558,7 +509,6 @@ export function BatchDetailPage() {
       document.body.appendChild(anchor)
       anchor.click()
       anchor.remove()
-      showToast('Đã tải ảnh QR (URL demo)')
     }
     canvas.toBlob((blob) => {
       if (!blob) {
@@ -568,43 +518,66 @@ export function BatchDetailPage() {
       const url = URL.createObjectURL(blob)
       save(url)
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+      showToast('Đã tải ảnh QR', 'success')
     }, 'image/png')
-  }
-
-  function downloadDocument(document: PublicDocument) {
-    if (!detail) return
-    if (document.id === 'metadata') {
-      downloadFile(document.name, JSON.stringify(METADATA_JSON, null, 2), 'application/json')
-      showToast('Đã tải tệp demo')
-      return
-    }
-    if (document.id === 'certificate') {
-      const text = `COCOMARK - GIẤY CHỨNG NHẬN NGUỒN GỐC\nLô hàng: ${detail.code}\nNông trại: ${detail.farmId} - ${detail.farmLocation}\nNgày thu hoạch: ${detail.harvestDate}\nKhối lượng: 1.000 kg\n\nTài liệu mô phỏng cho prototype COCOMARK.`
-      downloadFile(document.name, text, 'application/pdf')
-      showToast('Đã tải tệp demo')
-      return
-    }
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800"><rect width="1200" height="800" fill="#b9d3a4"/><circle cx="420" cy="470" r="130" fill="#5d3a1d"/><circle cx="640" cy="490" r="140" fill="#5d3a1d"/><circle cx="840" cy="470" r="125" fill="#5d3a1d"/><text x="600" y="720" text-anchor="middle" font-family="sans-serif" font-size="34" fill="#fff3e5">COCOMARK - ${detail.code}</text></svg>`
-    downloadFile(document.name, svg, 'image/svg+xml')
-    showToast('Đã tải tệp demo')
   }
 
   function scrollTabs(direction: number) {
     tabsRef.current?.scrollBy({ left: direction * 180, behavior: 'smooth' })
   }
 
+  function recallAction() {
+    if (batch!.recall)
+      return (
+        <span className="batch-action batch-action-done">
+          <CheckIcon />
+          Đã thu hồi ·{' '}
+          <ExplorerLink kind="tx" value={batch!.recall.txHash}>
+            {shortHash(batch!.recall.txHash)}
+          </ExplorerLink>
+        </span>
+      )
+    if (!referenceIncident)
+      return (
+        <Button
+          variant="danger"
+          className="batch-action"
+          disabled
+          title="Cần một sự cố trên chain làm tham chiếu trước khi thu hồi."
+        >
+          <BanIcon />
+          Chưa có sự cố tham chiếu
+        </Button>
+      )
+    return (
+      <Link
+        className="button danger batch-action"
+        to={`/admin/incidents/${referenceIncident.incidentId}?recall=${batch!.tokenId}`}
+      >
+        <BanIcon />
+        Thu hồi lô này
+      </Link>
+    )
+  }
+
   return (
     <div className="batches-page batch-detail-page">
       <PageHeader
-        title={detail.code}
-        description={`tokenId #${detail.tokenId} · ${detail.farmId} / ${detail.groupId} · ${detail.weightKg.toLocaleString('vi-VN')} kg · 1 NFT`}
-        crumbs={[{ label: 'Lô hàng', to: '/admin/batches' }, { label: detail.code }]}
+        title={batch.batchCode}
+        description={`tokenId #${batch.tokenId} · ${batch.farmId} / ${batch.harvestGroupId} · ${batch.quantityKg.toLocaleString('vi-VN')} kg · 1 NFT`}
+        crumbs={[{ label: 'Lô hàng', to: '/admin/batches' }, { label: batch.batchCode }]}
         actions={
           <div className="batch-header-pills">
-            <span className={`batch-status ${detail.lifecycle.toLowerCase()}`}>
-              {LIFECYCLE_PILL[detail.lifecycle]}
+            <span className={`batch-status ${batch.lifecycle.toLowerCase()}`}>
+              {LIFECYCLE_PILL[batch.lifecycle]}
             </span>
-            {recall && <span className="batch-status recalled">Đã thu hồi</span>}
+            {batch.expired && <span className="batch-status expired">Đã hết hạn</span>}
+            {batch.recalled && (
+              <span className="batch-status recalled">
+                <AlertIcon size={13} />
+                Đã thu hồi
+              </span>
+            )}
           </div>
         }
       />
@@ -659,77 +632,137 @@ export function BatchDetailPage() {
         <div className="batch-overview">
           <section className="batch-card batch-overview-main">
             <div className="batch-overview-grid">
-              <Field label="tokenId">#{detail.tokenId}</Field>
-              <Field label="batchCode">{detail.code}</Field>
-              <Field label="Khối lượng (cố định)">
-                {detail.weightKg.toLocaleString('vi-VN')} kg
-              </Field>
+              <Field label="tokenId">#{batch.tokenId}</Field>
+              <Field label="batchCode">{batch.batchCode}</Field>
+              <Field label="Khối lượng">{batch.quantityKg.toLocaleString('vi-VN')} kg</Field>
 
-              <Field label="farmId">{detail.farmId}</Field>
-              <Field label="farmLocation">{detail.farmLocation}</Field>
-              <Field label="harvestGroupId">{detail.groupId}</Field>
+              <Field label="farmId">{batch.farmId}</Field>
+              <Field label="farmLocation">{batch.farmLocation}</Field>
+              <Field label="harvestGroupId">{batch.harvestGroupId}</Field>
 
-              <Field label="harvestDate">{detail.harvestDate}</Field>
-              <Field label="expiryDate">{detail.expiryDate}</Field>
-              <Field label="Giống">{detail.variety}</Field>
+              <Field label="harvestDate">{formatDate(batch.harvestDate)}</Field>
+              <Field label="expiryDate">{formatTime(batch.expiryDate)}</Field>
+              <Field label="Giống">{detail.variety ?? 'Không có trong metadata'}</Field>
 
-              <Field label="Phân bón">{detail.fertilizer}</Field>
+              <Field label="Phân bón">{detail.fertilizer ?? 'Không có trong metadata'}</Field>
               <Field label="Nhiệt độ min/max">
-                {detail.tempMin}–{detail.tempMax}°C
+                {tempMin}–{tempMax}°C
               </Field>
               <Field label="Chủ sở hữu NFT">
                 <span className="batch-owner overview">
                   <span className="batch-owner-label">
                     <WalletIcon />
-                    {detail.ownerLabel}
+                    {partyText(batch.owner, detail.roleLabels)}
                   </span>
                   <span className="batch-owner-addr">
-                    <span className="mono">{shortAddress(detail.ownerAddress)}</span>
-                    <CopyButton text={detail.ownerAddress} message="Đã sao chép địa chỉ ví" />
+                    <span className="mono">{shortAddress(batch.owner)}</span>
+                    <CopyButton text={batch.owner} message="Đã sao chép địa chỉ ví" />
                   </span>
                 </span>
               </Field>
 
               <Field label="Vòng đời / Hết hạn / Thu hồi">
                 <span className="batch-status-group">
-                  <span className={`batch-status ${detail.lifecycle.toLowerCase()}`}>
-                    {LIFECYCLE_PILL[detail.lifecycle]}
+                  <span className={`batch-status ${batch.lifecycle.toLowerCase()}`}>
+                    {LIFECYCLE_PILL[batch.lifecycle]}
                   </span>
-                  {recall && <span className="batch-status recalled">Đã thu hồi</span>}
+                  {batch.expired && <span className="batch-status expired">Đã hết hạn</span>}
+                  {batch.recalled && <span className="batch-status recalled">Đã thu hồi</span>}
                 </span>
               </Field>
               <Field label="metadata URI">
                 <span className="batch-chip">
-                  <span className="mono">tokenURI {detail.metadataCid}</span>
-                  <CopyButton text={detail.metadataUri} message="Đã sao chép metadata URI" />
+                  <span className="mono">tokenURI {detail.metadataCid || '—'}</span>
+                  {detail.tokenUri && (
+                    <CopyButton text={detail.tokenUri} message="Đã sao chép metadata URI" />
+                  )}
                 </span>
               </Field>
+              <Field label="Giao dịch khởi tạo">
+                {batch.createTx ? (
+                  <span className="batch-tx">
+                    <ExplorerLink kind="tx" value={batch.createTx}>
+                      {shortHash(batch.createTx)}
+                    </ExplorerLink>
+                    <CopyButton text={batch.createTx} message="Đã sao chép mã giao dịch" />
+                  </span>
+                ) : (
+                  'Không có event BatchCreated'
+                )}
+              </Field>
             </div>
+
+            {batch.recall && (
+              <div className="batch-warning recall">
+                <span className="batch-warning-icon">
+                  <AlertIcon />
+                </span>
+                <div>
+                  <strong>Lô đã bị thu hồi</strong>
+                  <p>
+                    Thu hồi lúc {formatTime(batch.recall.at)} theo sự cố #{batch.recall.incidentId}.{' '}
+                    {detail.recallReasonText
+                      ? `Lý do: ${detail.recallReasonText}`
+                      : 'Lý do lưu trong tệp trên IPFS, xem tab tài liệu công khai.'}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {detail.sold && (
+              <div className="batch-warning">
+                <span className="batch-warning-icon">
+                  <InfoIcon />
+                </span>
+                <div>
+                  <strong>Đã bán cho Retailer</strong>
+                  <p>
+                    {partyText(detail.sold.retailer, detail.roleLabels)} ·{' '}
+                    {formatTime(detail.sold.at)} ·{' '}
+                    <ExplorerLink kind="tx" value={detail.sold.txHash}>
+                      {shortHash(detail.sold.txHash)}
+                    </ExplorerLink>
+                  </p>
+                </div>
+              </div>
+            )}
           </section>
 
           <aside className="batch-card batch-actions">
             <h2>Hành động</h2>
-            <Link className="button secondary batch-action" to="/admin/incidents">
-              <FlagIcon />
-              Xem sự cố
-            </Link>
-            <Link className="button secondary batch-action" to={QR_DEMO_PATH}>
+            <Link
+              className="button secondary batch-action"
+              to={`/trace/${config.chainId}/${config.contractAddress}/${batch.tokenId}`}
+            >
               <ExternalIcon />
               Mở trang công khai
             </Link>
+            {batchIncidents[0] && (
+              <Link
+                className="button secondary batch-action"
+                to={`/admin/incidents/${batchIncidents[0].incidentId}`}
+              >
+                <FlagIcon />
+                Xem sự cố #{batchIncidents[0].incidentId}
+              </Link>
+            )}
+            {recallAction()}
+            <p className="batch-actions-note">
+              Thu hồi chỉ áp dụng cho đúng lô này và cần một sự cố tham chiếu tồn tại trên chain.
+            </p>
           </aside>
         </div>
       )}
 
       {tab === 'public' && (
         <div className="batch-docs">
-          {PUBLIC_DOCUMENTS.map((document) => (
-            <article className="batch-doc-card" key={document.id}>
+          {detail.documents.map((document) => (
+            <article className="batch-doc-card" key={document.key}>
               <div className="batch-doc-head">
-                <span className={`batch-doc-icon ${document.id}`}>
-                  {document.id === 'metadata' && <span className="batch-braces">{'{}'}</span>}
-                  {document.id === 'certificate' && <FileIcon />}
-                  {document.id === 'image' && (
+                <span className={`batch-doc-icon ${document.key}`}>
+                  {document.key === 'metadata' && <span className="batch-braces">{'{}'}</span>}
+                  {document.key === 'certificate' && <FileIcon />}
+                  {document.key === 'image' && (
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                       <rect
                         x="3"
@@ -747,125 +780,126 @@ export function BatchDetailPage() {
                 </span>
                 <div className="batch-doc-title">
                   <strong>{document.name}</strong>
-                  <span className="batch-fixture">FIXTURE</span>
-                  <p>
-                    {document.description} · {document.size}
-                  </p>
+                  <p>{document.label}</p>
                 </div>
               </div>
 
               <div className="batch-doc-chip">
                 <span>CID</span>
-                <span className="mono">{document.shortCid}</span>
-                <CopyButton text={document.cid} message="Đã sao chép CID" />
+                <span className="mono">{document.cid || '—'}</span>
+                {document.cid && <CopyButton text={document.cid} message="Đã sao chép CID" />}
+              </div>
+              <div className="batch-doc-chip">
+                <span>ipfs://</span>
+                <span className="mono">{document.cid ? `ipfs://${document.cid}` : '—'}</span>
               </div>
               <div className="batch-doc-chip">
                 <span>SHA-256</span>
-                <span className="mono">{document.shortSha}</span>
-                <CopyButton text={document.sha256} message="Đã sao chép SHA-256" />
+                <span className="mono break">{document.sha256 || '—'}</span>
+                {document.sha256 && (
+                  <CopyButton text={document.sha256} message="Đã sao chép SHA-256" />
+                )}
               </div>
 
               <div className="batch-doc-actions">
-                <Button variant="secondary" onClick={() => setDocModal(document)}>
-                  <EyeIcon />
-                  Xem bản gốc
-                </Button>
-                <Button variant="secondary" onClick={() => downloadDocument(document)}>
-                  <DownloadIcon />
-                  Mở/tải tệp
-                </Button>
+                {document.fileUrl ? (
+                  <a
+                    className="button secondary"
+                    href={document.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalIcon />
+                    Mở bản gốc
+                  </a>
+                ) : (
+                  <span className="batch-doc-missing">Không có CID trong metadata</span>
+                )}
               </div>
 
-              <div className="batch-doc-check">
+              <div className={`batch-doc-check ${document.verified}`}>
                 <strong># Kiểm tra SHA-256</strong>
-                <span>Chưa đối chiếu SHA-256.</span>
+                <span>{verifyText(document.verified)}</span>
               </div>
             </article>
           ))}
-        </div>
-      )}
 
-      {tab === 'private' &&
-        (detail.code === 'COCONUT-001' ? (
-          <div className="batch-private">
-            <div className="batch-warning">
-              <span className="batch-warning-icon">
-                <AlertIcon />
-              </span>
-              <div>
-                <strong>Hóa đơn bán buôn riêng (ACL ngoài chuỗi)</strong>
-                <p>
-                  Hóa đơn không công khai. Chỉ ví tải lên và ví được cấp quyền mới đọc được, sau khi
-                  ký phiên truy cập.
-                </p>
-              </div>
-            </div>
-
-            <section className="batch-card batch-private-card">
-              <div className="batch-private-head">
-                <span className="batch-doc-icon private">
-                  <LockIcon />
-                </span>
-                <div>
-                  <strong>hoa-don-si-{detail.code}.pdf</strong>
-                  <span>DOC-001 · 96 KB · gắn token #{detail.tokenId} · mã hóa riêng</span>
-                </div>
-              </div>
-
-              <div className="batch-403">
-                <span className="batch-403-icon">
+          {batch.recall && detail.recallArtifact && (
+            <article className="batch-doc-card">
+              <div className="batch-doc-head">
+                <span className="batch-doc-icon certificate">
                   <AlertIcon />
                 </span>
-                <h3>403 - Không có quyền đọc tài liệu</h3>
-                <p>
-                  Admin không có quyền mặc định với hóa đơn riêng; chưa được uploader cấp quyền
-                  (403).
-                </p>
+                <div className="batch-doc-title">
+                  <strong>
+                    {detail.recallArtifact.kind === 'pdf'
+                      ? 'ly-do-thu-hoi.pdf'
+                      : 'recall-reason.json'}
+                  </strong>
+                  <p>Tệp lý do thu hồi ghi trong event BatchRecalled</p>
+                </div>
               </div>
-
-              <p className="batch-private-foot">
-                Bạn đang xem với ví Admin. Chỉ uploader mới thấy phần quản lý quyền.
-              </p>
-            </section>
-          </div>
-        ) : (
-          <div className="batch-private-empty">
-            <span className="batch-private-empty-icon">
-              <InfoIcon />
-            </span>
-            <p>
-              Lô này chưa có hóa đơn bán buôn riêng. Farmer có thể tải lên ở bước 3 của trình tạo
-              lô.
-            </p>
-          </div>
-        ))}
+              <div className="batch-doc-chip">
+                <span>CID</span>
+                <span className="mono">{detail.recallArtifact.cid || '—'}</span>
+              </div>
+              <div className="batch-doc-chip">
+                <span>SHA-256</span>
+                <span className="mono break">{detail.recallArtifact.expectedSha256 || '—'}</span>
+              </div>
+              <div className="batch-doc-actions">
+                {detail.recallArtifact.cid && (
+                  <a
+                    className="button secondary"
+                    href={detail.recallArtifact.fileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <ExternalIcon />
+                    Mở tệp lý do
+                  </a>
+                )}
+              </div>
+              <div className={`batch-doc-check ${detail.recallArtifact.verified}`}>
+                <strong># Kiểm tra SHA-256</strong>
+                <span>{verifyText(detail.recallArtifact.verified)}</span>
+              </div>
+            </article>
+          )}
+        </div>
+      )}
 
       {tab === 'temperature' && (
         <div className="batch-temperature">
           {readings.length > 0 ? (
             <>
               <section className="batch-card batch-chart-card">
-                <TemperatureChart readings={readings} min={detail.tempMin} max={detail.tempMax} />
+                <TemperatureChart readings={chartReadings} min={tempMin} max={tempMax} />
                 <p className="batch-chart-note">
-                  Giá trị đọc từ CSV bởi script Python/Web3.py (không phải cảm biến vật lý). Vùng
-                  xanh là ngưỡng minh họa trong metadata.
+                  Dữ liệu đọc từ event TransitRecorded trên chain; số nguyên centi°C được chia 100.
+                  Vùng xanh là ngưỡng trong metadata.
                 </p>
               </section>
 
-              {overReading && (
-                <div className="batch-warning">
-                  <span className="batch-warning-icon">
-                    <AlertIcon />
-                  </span>
-                  <div>
-                    <strong>Vượt ngưỡng nhiệt độ: {overReading.temperatureC}°C</strong>
-                    <p>
-                      Đây là một lần vượt ngưỡng nhiệt độ ghi nhận trong dữ liệu vận chuyển, không
-                      tự động là bằng chứng nhiễm khuẩn hay mất an toàn thực phẩm.
-                    </p>
-                  </div>
+              <div className={`batch-warning ${overReadings.length > 0 ? '' : 'ok'}`}>
+                <span className="batch-warning-icon">
+                  {overReadings.length > 0 ? <AlertIcon /> : <CheckIcon />}
+                </span>
+                <div>
+                  <strong>
+                    {overReadings.length > 0
+                      ? `Vượt ngưỡng nhiệt độ: ${overReadings.length} reading`
+                      : 'Không có reading vượt ngưỡng'}
+                  </strong>
+                  <p>
+                    {overReadings.length > 0
+                      ? `Có ${overReadings.length}/${readings.length} reading ngoài khoảng ${tempMin}–${tempMax}°C${
+                          maxTemp !== null ? `; cao nhất ${maxTemp.toFixed(2)}°C` : ''
+                        }. Đây là dữ liệu đo, không phải kết luận nhiễm khuẩn.`
+                      : 'Mọi reading trên chain nằm trong khoảng tham chiếu; vẫn cần đối chiếu hồ sơ và sự cố.'}
+                  </p>
                 </div>
-              )}
+              </div>
 
               <section className="batch-card batch-readings">
                 <div className="batch-table-wrap">
@@ -881,30 +915,36 @@ export function BatchDetailPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {readings.map((reading) => (
-                        <tr key={reading.id} className={reading.over ? 'over' : ''}>
-                          <td className="mono">#{reading.id}</td>
-                          <td>
-                            <strong className={reading.over ? 'temp-over' : ''}>
-                              {reading.temperatureC.toFixed(1)}°C
-                            </strong>
-                            <span>({reading.centiC} centi°C)</span>
-                            {reading.over && <em>• vượt ngưỡng</em>}
-                          </td>
-                          <td>{reading.observedAt}</td>
-                          <td>{reading.blockAt}</td>
-                          <td>{reading.location}</td>
-                          <td>
-                            <span className="batch-tx">
-                              <span className="mono">{shortHash(reading.txHash)}</span>
-                              <CopyButton
-                                text={reading.txHash}
-                                message="Đã sao chép mã giao dịch"
-                              />
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                      {readings.map((reading) => {
+                        const over =
+                          reading.temperatureC < tempMin || reading.temperatureC > tempMax
+                        return (
+                          <tr key={reading.readingId} className={over ? 'over' : ''}>
+                            <td className="mono">#{reading.readingId}</td>
+                            <td>
+                              <strong className={over ? 'temp-over' : ''}>
+                                {reading.temperatureC.toFixed(2)}°C
+                              </strong>
+                              <span>({Math.round(reading.temperatureC * 100)} centi°C)</span>
+                              {over && <em>• vượt ngưỡng</em>}
+                            </td>
+                            <td>{formatTime(reading.observedAt)}</td>
+                            <td>{formatTime(reading.at)}</td>
+                            <td>{reading.location}</td>
+                            <td>
+                              <span className="batch-tx">
+                                <ExplorerLink kind="tx" value={reading.txHash}>
+                                  {shortHash(reading.txHash)}
+                                </ExplorerLink>
+                                <CopyButton
+                                  text={reading.txHash}
+                                  message="Đã sao chép mã giao dịch"
+                                />
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -913,7 +953,7 @@ export function BatchDetailPage() {
           ) : (
             <section className="batch-card batch-empty-state">
               <h2>Chưa có bản ghi nhiệt độ</h2>
-              <p>Lô này chưa có dữ liệu vận chuyển trong phiên demo.</p>
+              <p>Lô này chưa có event TransitRecorded trên chain.</p>
             </section>
           )}
         </div>
@@ -923,57 +963,71 @@ export function BatchDetailPage() {
         <div className="batch-journey">
           <section className="batch-card batch-timeline">
             <h2>Dòng thời gian vận hành (provenance)</h2>
-            <ol>
-              {journey.map((event) => (
-                <li key={event.id} className={`journey-item ${event.kind}`}>
-                  <span className="journey-icon">
-                    {event.kind === 'mint' && <LeafIcon />}
-                    {event.kind === 'handoff' && <TruckIcon />}
-                    {event.kind === 'reading' && <ThermometerIcon />}
-                    {event.kind === 'sold' && <StoreIcon />}
-                    {event.kind === 'incident' && <FlagIcon />}
-                    {event.kind === 'recall' && <AlertIcon />}
-                  </span>
-                  <div className="journey-body">
-                    <strong>{event.title}</strong>
-                    <p>{event.description.replaceAll('COCONUT-001', detail.code)}</p>
-                    <span className="journey-meta">
-                      {event.time} ·{' '}
-                      <span className="batch-tx">
-                        <span className="mono">{shortHash(event.txHash)}</span>
-                        <CopyButton text={event.txHash} message="Đã sao chép mã giao dịch" />
-                      </span>
+            {journey.length === 0 ? (
+              <p className="batch-chart-note">Chưa có event hành trình trên chain.</p>
+            ) : (
+              <ol>
+                {journey.map((event) => (
+                  <li key={event.id} className={`journey-item ${event.kind}`}>
+                    <span className="journey-icon">
+                      {event.kind === 'mint' && <LeafIcon />}
+                      {event.kind === 'transfer' && <TruckIcon />}
+                      {event.kind === 'reading' && <ThermometerIcon />}
+                      {event.kind === 'sold' && <StoreIcon />}
+                      {event.kind === 'incident' && <FlagIcon />}
+                      {event.kind === 'recall' && <AlertIcon size={17} />}
                     </span>
-                  </div>
-                </li>
-              ))}
-            </ol>
+                    <div className="journey-body">
+                      <strong>{event.title}</strong>
+                      <p>{event.description}</p>
+                      <span className="journey-meta">
+                        {formatTime(event.time)} ·{' '}
+                        <span className="batch-tx">
+                          <ExplorerLink kind="tx" value={event.txHash}>
+                            {shortHash(event.txHash)}
+                          </ExplorerLink>
+                          <CopyButton text={event.txHash} message="Đã sao chép mã giao dịch" />
+                        </span>
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            )}
           </section>
 
           <section className="batch-card batch-transfers">
             <h2>Lịch sử sở hữu ERC-721</h2>
-            <div className="transfer-list">
-              {transfers.map((transfer) => (
-                <div className="transfer-item" key={transfer.id}>
-                  <div className="transfer-head">
-                    <strong>Transfer #{transfer.id}</strong>
-                    <span>
-                      {transfer.from} <span className="transfer-arrow">→</span> {transfer.to}
-                    </span>
+            {detail.ownership.length === 0 ? (
+              <p className="batch-chart-note">Chưa có event Transfer trên chain.</p>
+            ) : (
+              <div className="transfer-list">
+                {detail.ownership.map((transfer, index) => (
+                  <div className="transfer-item" key={transfer.txHash}>
+                    <div className="transfer-head">
+                      <strong>Transfer #{index + 1}</strong>
+                      <span>
+                        {partyText(transfer.from, detail.roleLabels)}{' '}
+                        <span className="transfer-arrow">→</span>{' '}
+                        {partyText(transfer.to, detail.roleLabels)}
+                      </span>
+                    </div>
+                    <div className="transfer-meta">
+                      <span>{formatTime(transfer.at)}</span>
+                      <span className="batch-tx">
+                        <ExplorerLink kind="tx" value={transfer.txHash}>
+                          {shortHash(transfer.txHash)}
+                        </ExplorerLink>
+                        <CopyButton text={transfer.txHash} message="Đã sao chép mã giao dịch" />
+                      </span>
+                    </div>
                   </div>
-                  <div className="transfer-meta">
-                    <span>{transfer.time}</span>
-                    <span className="batch-tx">
-                      <span className="mono">{shortHash(transfer.txHash)}</span>
-                      <CopyButton text={transfer.txHash} message="Đã sao chép mã giao dịch" />
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
             <p className="batch-transfers-note">
               Lịch sử ERC-721 Transfer liệt kê mỗi lần đổi chủ đúng một lần (bao gồm mint từ địa chỉ
-              0x0). Khác với dòng thời gian vận hành ở tab Hành trình.
+              0x0). Khác với dòng thời gian vận hành ở trên.
             </p>
           </section>
         </div>
@@ -985,17 +1039,23 @@ export function BatchDetailPage() {
             <div className="batch-qr-canvas" ref={qrRef}>
               <QRCodeCanvas value={qrUrl} size={260} level="M" marginSize={2} />
             </div>
-            <strong>{detail.code}</strong>
+            <strong>{batch.batchCode}</strong>
           </div>
 
           <div className="batch-qr-main">
             <h2>Mã QR truy xuất</h2>
+            <p className="batch-qr-url">
+              <span className="mono break">{qrUrl}</span>
+            </p>
             <div className="batch-qr-actions">
               <Button variant="secondary" onClick={() => copyText(qrUrl, 'Đã sao chép liên kết')}>
                 <CopyIcon />
                 Sao chép liên kết
               </Button>
-              <Link className="button secondary" to={QR_DEMO_PATH}>
+              <Link
+                className="button secondary"
+                to={`/trace/${config.chainId}/${config.contractAddress}/${batch.tokenId}`}
+              >
                 <ExternalIcon />
                 Mở trang truy xuất
               </Link>
@@ -1006,51 +1066,24 @@ export function BatchDetailPage() {
             </div>
 
             <div className="batch-tech">
-              <button
-                type="button"
-                className="batch-tech-toggle"
-                aria-expanded={techOpen}
-                onClick={() => setTechOpen((current) => !current)}
-              >
-                Thông tin kỹ thuật
-                <ChevronIcon open={techOpen} />
-              </button>
-              {techOpen && (
-                <div className="batch-tech-body">
-                  <p>URL được mã hóa trong QR (bản demo)</p>
-                  <code>{qrUrl}</code>
-                  <p>URL chuẩn khi triển khai chính thức</p>
-                  <code>{QR_TECHNICAL.canonical}</code>
-                  <p className="batch-tech-note">{QR_TECHNICAL.note}</p>
-                  <div className="batch-tech-chips">
-                    <span className="batch-chip">
-                      <span className="mono">tokenURI {QR_TECHNICAL.tokenUri}</span>
-                      <CopyButton text={QR_TECHNICAL.ipfs} message="Đã sao chép tokenURI" />
-                    </span>
-                    <span className="batch-chip">
-                      <span className="mono">{QR_TECHNICAL.ipfs}</span>
-                    </span>
-                  </div>
-                </div>
-              )}
+              <div className="batch-tech-body">
+                <p>Mạng</p>
+                <code>
+                  {networkName} · chainId {config.chainId}
+                </code>
+                <p>Hợp đồng</p>
+                <code className="mono break">{config.contractAddress}</code>
+                <p>tokenURI</p>
+                <code className="mono break">{detail.tokenUri}</code>
+                <p className="batch-tech-note">
+                  QR trỏ thẳng tới trang tra cứu công khai theo chainId, địa chỉ hợp đồng và
+                  tokenId. Không dùng dữ liệu mẫu.
+                </p>
+              </div>
             </div>
           </div>
         </section>
       )}
-
-      <Modal
-        open={!!docModal}
-        onClose={() => setDocModal(null)}
-        title={docModal ? `${docModal.name} - bản gốc (fixture)` : 'Bản gốc tài liệu'}
-        wide
-        className="batch-doc-modal"
-      >
-        {docModal?.id === 'metadata' && (
-          <pre className="doc-json">{JSON.stringify(METADATA_JSON, null, 2)}</pre>
-        )}
-        {docModal?.id === 'certificate' && <CertificatePreview detail={detail} />}
-        {docModal?.id === 'image' && <BatchImagePreview code={detail.code} />}
-      </Modal>
     </div>
   )
 }

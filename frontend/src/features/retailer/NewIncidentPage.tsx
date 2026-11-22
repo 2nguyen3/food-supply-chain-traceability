@@ -1,369 +1,170 @@
-import { useState, useRef } from 'react'
-import { DashboardIcon } from '../../components/common/DashboardIcon'
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { TxProgressModal, type TxStepDef } from '../../components/TxProgressModal'
+import { useStepFlow } from '../../hooks/useStepFlow'
+import { sha256Hex, toBytes32 } from '../../lib/hash'
+import { bindDocument, describeApiError, uploadDocument } from '../../services/documentsApi'
+import { findEvent, sendTransaction, toTxError } from '../../services/tx'
+import { RetailerBadge, RetailerEmpty, RetailerFlags, RetailerNotice } from './components'
+import { useRetailerSnapshot } from './hooks/useRetailerSnapshot'
+import './styles/retailer.css'
+
+interface ConfirmedReport { incidentId: string; documentId: string; tokenId: string }
+
+const TX_STEPS: TxStepDef[] = [
+  { label: 'Kiểm tra PDF', description: 'Tính SHA-256 từ byte gốc.' },
+  { label: 'Lưu báo cáo', description: 'Tải PDF lên backend và đối chiếu SHA-256.' },
+  { label: 'Chờ ký ví', description: 'Xác nhận reportIncident trong MetaMask.' },
+  { label: 'Phát giao dịch', description: 'Gửi giao dịch lên blockchain.' },
+  { label: 'Chờ biên nhận', description: 'Đợi blockchain xác nhận.' },
+  { label: 'Gắn tài liệu', description: 'Liên kết PDF đã tải lên với lô.' },
+  { label: 'Hoàn tất', description: 'Báo cáo và tài liệu đã được ghi nhận.' },
+]
 
 export default function RetailerNewIncidentPage() {
-  const [selectedBatch, setSelectedBatch] = useState('COCONUT-001')
+  const { data, address, error, loading, reload } = useRetailerSnapshot()
+  const [tokenId, setTokenId] = useState('')
+  const [file, setFile] = useState<File | null>(null)
   const [description, setDescription] = useState('')
+  const [fileHash, setFileHash] = useState('')
+  const [uploadedCid, setUploadedCid] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState('')
+  const [confirmed, setConfirmed] = useState<ConfirmedReport | null>(null)
+  const [completedIncidentId, setCompletedIncidentId] = useState('')
+  const [broadcastedHash, setBroadcastedHash] = useState('')
+  const [operation, setOperation] = useState<{ code: string; tokenId: string; filename: string } | null>(null)
+  const fileSelection = useRef(0)
+  const flow = useStepFlow()
+  const eligible = data?.batches.filter((batch) => batch.lifecycle === 'Delivered' || batch.lifecycle === 'Sold') ?? []
+  const selected = eligible.find((batch) => batch.tokenId === tokenId)
 
-  // State quản lý tệp JSON
-  const [jsonFile, setJsonFile] = useState<string | null>(null)
-
-  // State quản lý tệp PDF
-  const [pdfFile, setPdfFile] = useState<string | null>(null)
-
-  const [submitted, setSubmitted] = useState(false)
-  const [incidents, setIncidents] = useState<Array<{ batch: string; desc: string; date: string }>>([])
-
-  const jsonInputRef = useRef<HTMLInputElement>(null)
-  const pdfInputRef = useRef<HTMLInputElement>(null)
-
-  // Bắt lỗi validation
-  const isDescError = submitted && description.trim().length < 10
-  const isJsonError = submitted && !jsonFile
-  const isPdfError = submitted && !pdfFile
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    setSubmitted(true)
-
-    if (description.trim().length >= 10 && jsonFile && pdfFile) {
-      setIncidents((prev) => [
-        {
-          batch: selectedBatch,
-          desc: description,
-          date: new Date().toLocaleDateString('vi-VN'),
-        },
-        ...prev,
-      ])
-      // Reset form sau khi gửi
-      setDescription('')
-      setJsonFile(null)
-      setPdfFile(null)
-      setSubmitted(false)
+  async function selectFile(event: ChangeEvent<HTMLInputElement>) {
+    const next = event.target.files?.[0] ?? null
+    const selection = ++fileSelection.current
+    setFile(next); setFileHash(''); setUploadedCid(''); setMessage('')
+    if (!next) return
+    if (next.type !== 'application/pdf' || next.size === 0 || next.size > 10 * 1024 * 1024) {
+      setMessage('Chọn tệp PDF hợp lệ, dung lượng tối đa 10 MB.')
+      return
+    }
+    try {
+      const header = new TextDecoder().decode(new Uint8Array(await next.slice(0, 5).arrayBuffer()))
+      if (header !== '%PDF-') throw new Error('Nội dung tệp không phải PDF hợp lệ.')
+      const hash = await sha256Hex(next)
+      if (selection === fileSelection.current) setFileHash(hash)
+    } catch (cause) {
+      if (selection === fileSelection.current) setMessage(cause instanceof Error ? cause.message : 'Không đọc được PDF.')
     }
   }
 
-  return (
-    <div className="page-container" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <header>
-        <h1 style={{ fontSize: 26, fontWeight: 700, margin: 0, color: '#1E293B' }}>Báo cáo sự cố</h1>
-        <p className="muted" style={{ margin: '6px 0 0 0', fontSize: 14 }}>
-          Có thể báo cáo kể cả khi lô đã bán hoặc đã hết hạn. Đính kèm bằng chứng JSON và PDF.
-        </p>
-      </header>
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!address || !selected || !file || !fileHash || busy || confirmed || broadcastedHash) return
+    if (description.trim().length < 10) {
+      setMessage('Mô tả cần ít nhất 10 ký tự.')
+      return
+    }
+    if (file.type !== 'application/pdf' || file.size === 0 || file.size > 10 * 1024 * 1024) {
+      setMessage('Chọn tệp PDF hợp lệ, dung lượng tối đa 10 MB.')
+      return
+    }
+    const header = new Uint8Array(await file.slice(0, 5).arrayBuffer())
+    if (new TextDecoder().decode(header) !== '%PDF-') {
+      setMessage('Nội dung tệp không phải PDF hợp lệ.')
+      return
+    }
+    setBusy(true)
+    setBroadcastedHash('')
+    setCompletedIncidentId('')
+    setOperation({ code: selected.code, tokenId: selected.tokenId, filename: file.name }); flow.start()
+    setMessage('Đang tính SHA-256 và tải PDF lên dịch vụ tài liệu…')
+    try {
+      const localHash = await sha256Hex(file)
+      setFileHash(localHash)
+      flow.goTo(1)
+      const uploaded = await uploadDocument(file, file.name, 'incident_report')
+      if (uploaded.sha256.toLowerCase() !== localHash.toLowerCase()) {
+        flow.fail('Hash PDF trả về từ máy chủ không khớp byte của tệp. Chưa gửi giao dịch.')
+        return
+      }
+      setUploadedCid(uploaded.cid)
+      setMessage('Đã lưu bản nháp. Đang chờ MetaMask và biên nhận blockchain…')
+      const tx = await sendTransaction(address, (contract) => contract.reportIncident(BigInt(selected.tokenId), uploaded.cid, toBytes32(localHash)), {
+        onSigning: () => flow.goTo(2),
+        onBroadcast: (hash) => { setBroadcastedHash(hash); flow.setTxHash(hash); flow.goTo(4) },
+      })
+      flow.goTo(5)
+      const incidentId = findEvent(tx.receipt, 'IncidentReported')?.incidentId?.toString()
+      if (!incidentId) {
+        flow.fail('Giao dịch đã xác nhận nhưng chưa đọc được mã sự cố từ biên nhận. Hãy kiểm tra giao dịch trước khi gửi lại.')
+        return
+      }
+      setConfirmed({ incidentId, documentId: uploaded.id, tokenId: selected.tokenId })
+      setCompletedIncidentId(incidentId)
+      try {
+        await bindDocument(uploaded.id, selected.tokenId)
+        setMessage(`Sự cố #${incidentId} đã xác nhận trên blockchain (${tx.hash}); PDF đã gắn với lô ${selected.code}.`)
+        setConfirmed(null)
+        setFile(null)
+        setDescription('')
+        setBroadcastedHash('')
+        flow.goTo(6); flow.succeed()
+        reload()
+      } catch (cause) {
+        const detail = `Sự cố #${incidentId} đã xác nhận trên blockchain. Chưa gắn được PDF vào backend: ${describeApiError(cause)}`
+        setMessage(detail); flow.fail(detail)
+      }
+    } catch (cause) {
+      const failure = toTxError(cause)
+      flow.fail(cause instanceof Error && cause.name === 'HttpError' ? describeApiError(cause) : failure.message, failure.kind === 'rejected')
+    } finally { setBusy(false) }
+  }
 
-      {/* Bố cục 2 cột */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 1.15fr) minmax(320px, 1fr)', gap: 32, alignItems: 'start' }}>
-        {/* Cột trái: Form nhập liệu */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {/* Lô liên quan */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <label style={{ fontSize: 14, fontWeight: 700, color: '#2B241A' }}>Lô liên quan</label>
-            <select
-              value={selectedBatch}
-              onChange={(e) => setSelectedBatch(e.target.value)}
-              className="select"
-              style={{
-                width: '100%',
-                background: '#FAF7F2',
-                color: '#2B241A',
-                border: '1px solid #E8E2D9',
-                borderRadius: 14,
-                padding: '12px 16px',
-                fontSize: 14,
-              }}
-            >
-              <option value="COCONUT-001">COCONUT-001 · Sold</option>
-              <option value="COCONUT-002">COCONUT-002 · Sold</option>
-              <option value="COCONUT-003">COCONUT-003 · Delivered</option>
-            </select>
-            <div>
-              <span
-                style={{
-                  display: 'inline-block',
-                  padding: '4px 14px',
-                  borderRadius: 20,
-                  fontSize: 12,
-                  fontWeight: 600,
-                  background: selectedBatch === 'COCONUT-003' ? '#EAF5EC' : '#2A4D3B',
-                  color: selectedBatch === 'COCONUT-003' ? '#1E7E34' : '#FFFFFF',
-                }}
-              >
-                {selectedBatch === 'COCONUT-003' ? 'Delivered · Đã giao' : 'Sold · Đã bán'}
-              </span>
-            </div>
-          </div>
+  async function retryBind() {
+    if (!confirmed || busy) return
+    setBusy(true)
+    try {
+      await bindDocument(confirmed.documentId, confirmed.tokenId)
+      setMessage(`Đã gắn PDF cho sự cố #${confirmed.incidentId}.`)
+      flow.goTo(6); flow.succeed()
+      setConfirmed(null); setFile(null); setDescription(''); setBroadcastedHash(''); reload()
+    } catch (cause) { setMessage(describeApiError(cause)) }
+    finally { setBusy(false) }
+  }
 
-          {/* Mô tả quan sát */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label style={{ fontSize: 14, fontWeight: 700, color: '#2B241A' }}>Mô tả quan sát</label>
-            <textarea
-              rows={4}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Ví dụ: Một số trái có mùi lạ khi mở, ghi nhận lúc nhập kho."
-              style={{
-                width: '100%',
-                resize: 'vertical',
-                minHeight: 110,
-                background: '#FFFFFF',
-                padding: 14,
-                borderRadius: 16,
-                boxSizing: 'border-box',
-                border: isDescError ? '1.5px solid #DC2626' : '1px solid #E8E2D9',
-                outline: 'none',
-                fontSize: 14,
-                color: '#2B241A',
-                fontFamily: 'inherit',
-              }}
-            />
-            {isDescError ? (
-              <div style={{ color: '#DC2626', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                <span>⚠</span> Mô tả cần ít nhất 10 ký tự.
-              </div>
-            ) : (
-              <span className="muted" style={{ fontSize: 12 }}>
-                Ít nhất 10 ký tự. Nêu những gì đã thấy, không kết luận nguyên nhân.
-              </span>
-            )}
-          </div>
-
-          {/* Bằng chứng JSON */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <label style={{ fontSize: 14, fontWeight: 700, color: '#2B241A' }}>Bằng chứng JSON</label>
-            <input
-              type="file"
-              accept=".json"
-              ref={jsonInputRef}
-              style={{ display: 'none' }}
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) {
-                  setJsonFile(`${file.name} (${Math.round(file.size / 1024)} KB)`)
-                }
-              }}
-            />
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <button
-                type="button"
-                onClick={() => jsonInputRef.current?.click()}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '9px 18px',
-                  borderRadius: 14,
-                  border: '1.5px solid #E8E2D9',
-                  background: '#FFFFFF',
-                  color: '#2B241A',
-                  fontWeight: 600,
-                  fontSize: 14,
-                  cursor: 'pointer',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                }}
-              >
-                <DashboardIcon name="download" />
-                <span>Chọn tệp</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setJsonFile('incident-evidence.json (2 KB)')}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  padding: '9px 18px',
-                  borderRadius: 14,
-                  border: 'none',
-                  background: 'transparent',
-                  color: '#2B241A',
-                  fontWeight: 600,
-                  fontSize: 14,
-                  cursor: 'pointer',
-                  transition: 'background-color 0.15s ease',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#EAF5EC')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-              >
-                Dùng tệp mẫu
-              </button>
-            </div>
-
-            {jsonFile && (
-              <div style={{ color: '#16A34A', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span>✓</span> {jsonFile}
-              </div>
-            )}
-
-            {isJsonError && (
-              <div style={{ color: '#DC2626', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span>⚠</span> Cần bằng chứng JSON.
-              </div>
-            )}
-            {!isJsonError && !jsonFile && (
-              <span className="muted" style={{ fontSize: 12 }}>Tệp .json mô tả quan sát</span>
-            )}
-          </div>
-
-          {/* Bằng chứng PDF */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <label style={{ fontSize: 14, fontWeight: 700, color: '#2B241A' }}>Bằng chứng PDF</label>
-            <input
-              type="file"
-              accept=".pdf"
-              ref={pdfInputRef}
-              style={{ display: 'none' }}
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) {
-                  setPdfFile(`${file.name} (${Math.round(file.size / 1024)} KB)`)
-                }
-              }}
-            />
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <button
-                type="button"
-                onClick={() => pdfInputRef.current?.click()}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '9px 18px',
-                  borderRadius: 14,
-                  border: '1.5px solid #E8E2D9',
-                  background: '#FFFFFF',
-                  color: '#2B241A',
-                  fontWeight: 600,
-                  fontSize: 14,
-                  cursor: 'pointer',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                }}
-              >
-                <DashboardIcon name="download" />
-                <span>Chọn tệp</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setPdfFile('bien-ban-giam-dinh.pdf (1.4 MB)')}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  padding: '9px 18px',
-                  borderRadius: 14,
-                  border: 'none',
-                  background: 'transparent',
-                  color: '#2B241A',
-                  fontWeight: 600,
-                  fontSize: 14,
-                  cursor: 'pointer',
-                  transition: 'background-color 0.15s ease',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#EAF5EC')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
-              >
-                Dùng tệp mẫu
-              </button>
-            </div>
-
-            {pdfFile && (
-              <div style={{ color: '#16A34A', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span>✓</span> {pdfFile}
-              </div>
-            )}
-
-            {isPdfError && (
-              <div style={{ color: '#DC2626', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span>⚠</span> Cần bằng chứng PDF.
-              </div>
-            )}
-            {!isPdfError && !pdfFile && (
-              <span className="muted" style={{ fontSize: 12 }}>Tệp .pdf biên bản/ảnh chụp</span>
-            )}
-          </div>
-
-          {/* Nút Submit Ký và gửi */}
-          <div style={{ marginTop: 8 }}>
-            <div
-              style={{
-                display: 'inline-block',
-                borderRadius: 16,
-                border: '2px solid #275641',
-                padding: 3,
-              }}
-            >
-              <button
-                type="submit"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  backgroundColor: '#275641',
-                  color: '#FFFFFF',
-                  padding: '12px 26px',
-                  borderRadius: 12,
-                  fontSize: 15,
-                  fontWeight: 600,
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                <DashboardIcon name="flag" />
-                <span>Ký và gửi reportIncident</span>
-              </button>
-            </div>
-          </div>
-        </form>
-
-        {/* Cột phải: Sự cố đã báo */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: '#1E293B' }}>Sự cố đã báo</h2>
-          {incidents.length === 0 ? (
-            <div
-              className="card"
-              style={{
-                padding: '60px 24px',
-                textAlign: 'center',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                borderRadius: 20,
-                border: '1px solid var(--line, #E8E2D9)',
-                background: '#fff',
-              }}
-            >
-              <div
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: '50%',
-                  background: '#EEF5EE',
-                  color: '#275641',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  marginBottom: 14,
-                }}
-              >
-                <DashboardIcon name="flag" />
-              </div>
-              <strong style={{ fontSize: 15, color: '#1E293B' }}>Chưa có sự cố nào</strong>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {incidents.map((inc, i) => (
-                <div key={i} className="card" style={{ padding: 16, borderRadius: 16, background: '#fff', border: '1px solid #E8E2D9' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <strong style={{ color: '#1E293B' }}>{inc.batch}</strong>
-                    <span className="muted" style={{ fontSize: 12 }}>{inc.date}</span>
-                  </div>
-                  <p style={{ margin: 0, fontSize: 13, color: '#475569' }}>{inc.desc}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
+  return <div className="retailer-page">
+    <header><h1>Báo cáo sự cố</h1><p>Retailer báo cáo lô đang sở hữu ở trạng thái Delivered hoặc Sold, kể cả lô đã hết hạn hoặc thu hồi. Tệp PDF là bằng chứng của báo cáo.</p></header>
+    <RetailerNotice loading={loading} error={error} reload={reload} />
+    {message && <div className="retailer-card" role="status">{message}{confirmed && <div className="retailer-actions"><button className="retailer-button" disabled={busy} onClick={() => void retryBind()}>Thử gắn tệp lại</button></div>}</div>}
+    {data && <div className="retailer-grid">
+      <section className="retailer-card"><h2>Tạo báo cáo</h2>{!eligible.length ? <RetailerEmpty>Không có lô đủ điều kiện báo cáo.</RetailerEmpty> : <form className="retailer-form" onSubmit={(event) => void submit(event)}>
+        <label>Lô liên quan<select value={tokenId} onChange={(event) => setTokenId(event.target.value)} required disabled={busy || !!confirmed}><option value="">Chọn lô…</option>{eligible.map((batch) => <option value={batch.tokenId} key={batch.tokenId}>{batch.code} · NFT #{batch.tokenId}</option>)}</select></label>
+        {selected && <div><RetailerBadge batch={selected} /><RetailerFlags batch={selected} /></div>}
+        <label>Mô tả quan sát<textarea value={description} onChange={(event) => setDescription(event.target.value)} minLength={10} required rows={4} disabled={busy || !!confirmed} placeholder="Nêu những gì đã quan sát, không kết luận nguyên nhân." /></label>
+        <label>Bằng chứng PDF<input type="file" accept="application/pdf,.pdf" required disabled={busy || !!confirmed} onChange={(event) => void selectFile(event)} /></label>
+        {file && <p className="retailer-muted">{file.name} · {(file.size / 1024).toFixed(1)} KB</p>}
+        {fileHash && <p className="retailer-muted retailer-mono">SHA-256 PDF: {fileHash}</p>}
+        {uploadedCid && <p className="retailer-muted retailer-mono">CID PDF: {uploadedCid}</p>}
+        <p className="retailer-muted">Mô tả chỉ để rà soát trước khi gửi; API hiện chưa có trường lưu mô tả. Nội dung cần lưu lâu dài phải có trong PDF. Giao dịch chỉ được gửi sau khi hash backend khớp tệp. Báo cáo không tự thu hồi lô.</p>
+        <button className="retailer-button" disabled={busy || !!confirmed || !!broadcastedHash || !selected || !file || !fileHash || description.trim().length < 10}>{busy ? 'Đang xử lý…' : 'Ký và gửi reportIncident'}</button>
+        {broadcastedHash && !confirmed && <p className="retailer-muted" role="status">Giao dịch đã được phát. Kiểm tra biên nhận trước khi thử báo lại để tránh tạo sự cố trùng.</p>}
+      </form>}</section>
+      <section className="retailer-card"><h2>Lịch sử sự cố đã báo</h2>{!data.incidents.length ? <RetailerEmpty>Chưa có sự cố nào do ví này báo cáo.</RetailerEmpty> : <div className="retailer-list">{data.incidents.map((incident) => <div className="retailer-list-item" key={incident.id}><strong>#{incident.id} · {incident.code}</strong><span>{new Date(incident.at).toLocaleString('vi-VN')}</span><small className="retailer-mono">CID: {incident.cid}</small><small className="retailer-mono">SHA-256: {incident.hash}</small><small className="retailer-mono">Giao dịch: {incident.txHash}</small></div>)}</div>}</section>
+    </div>}
+    <TxProgressModal
+      open={!!operation}
+      onClose={() => { setOperation(null); flow.reset() }}
+      title={`Báo sự cố lô ${operation?.code ?? ''}`}
+      method="reportIncident()"
+      summary={operation ? [
+        { label: 'Lô', value: operation.code },
+        { label: 'Token ID', value: `#${operation.tokenId}` },
+        { label: 'Bằng chứng', value: operation.filename },
+      ] : []}
+      steps={TX_STEPS}
+      flow={flow.state}
+      successNote={`Sự cố #${completedIncidentId} đã được xác nhận trên blockchain và PDF đã gắn với lô.`}
+      onRetry={confirmed ? () => void retryBind() : undefined}
+    />
+  </div>
 }

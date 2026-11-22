@@ -1,55 +1,32 @@
-import { useEffect, useState } from 'react'
-import { Button, Modal, PageHeader } from '../../components/ui'
+import { useCallback, useState } from 'react'
+import { isAddress } from 'ethers'
+import { Button, ErrorState, LoadingState, Modal, PageHeader } from '../../components/ui'
 import { useToast } from '../../components/ui/toast'
-import { TxProgressModal } from './TxProgressModal'
+import { TxProgressModal, type TxStepDef } from '../../components/TxProgressModal'
+import { useSession } from '../../app/session'
+import { useStepFlow } from '../../hooks/useStepFlow'
+import { sendTransaction, TxError } from '../../services/tx'
+import { useAdminChain } from './hooks/useAdminChain'
+import { readAdminFarms } from './services/adminChain'
 import './styles/roles.css'
 import './styles/farms.css'
 
-interface FarmRow {
-  id: string
-  name: string
-  address: `0x${string}`
-  farmId: string | null
-  batches: number
-}
-
-const INITIAL_ROWS: FarmRow[] = [
-  {
-    id: 'farmer-a',
-    name: 'Farmer A',
-    address: '0xFA00000000000000000000000000000000000001',
-    farmId: 'FARM-A',
-    batches: 3,
-  },
-  {
-    id: 'farmer-b',
-    name: 'Farmer B',
-    address: '0xFB00000000000000000000000000000000000001',
-    farmId: null,
-    batches: 1,
-  },
+const TX_STEPS: TxStepDef[] = [
+  { label: 'Kiểm tra dữ liệu', description: 'Địa chỉ ví và farmId hợp lệ, đúng mạng.' },
+  { label: 'Ký giao dịch', description: 'Xác nhận assignFarmer trong MetaMask.' },
+  { label: 'Phát lên blockchain', description: 'Giao dịch đã gửi, chờ mạng xử lý.' },
+  { label: 'Chờ biên nhận', description: 'Đợi block xác nhận giao dịch.' },
+  { label: 'Đọc lại danh sách', description: 'Cập nhật farmId từ hợp đồng.' },
 ]
 
-const TX_HASHES: Record<string, string> = {
-  'farmer-a': '0x3c24b4a1b2c3d4e5f60718293a4b5c6d4f23a8',
-  'farmer-b': '0xe61e918a2b3c4d5e6f708192a3b4c5d66b749d',
+interface AssignForm {
+  address: string
+  farmId: string
 }
 
-const FALLBACK_TX_HASH = '0x3c24b4a1b2c3d4e5f60718293a4b5c6d4f23a8'
-
-const STORAGE_KEY = 'cocomark.admin.farmMappings'
-
-function loadRows(): FarmRow[] {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return INITIAL_ROWS
-    const saved = JSON.parse(raw) as Record<string, string | null>
-    return INITIAL_ROWS.map((row) =>
-      Object.prototype.hasOwnProperty.call(saved, row.id) ? { ...row, farmId: saved[row.id] } : row,
-    )
-  } catch {
-    return INITIAL_ROWS
-  }
+interface AssignOperation {
+  address: `0x${string}`
+  farmId: string
 }
 
 function shortAddress(address: string): string {
@@ -84,30 +61,18 @@ function CopyIcon() {
   )
 }
 
-interface MappingState {
-  row: FarmRow
-  farmId: string
-}
-
 export function FarmsPage() {
+  const { session } = useSession()
   const { showToast } = useToast()
-  const [rows, setRows] = useState<FarmRow[]>(loadRows)
-  const [editRow, setEditRow] = useState<FarmRow | null>(null)
-  const [farmId, setFarmId] = useState('')
-  const [progress, setProgress] = useState<MappingState | null>(null)
+  const flow = useStepFlow()
+  const loadFarms = useCallback((signal: AbortSignal) => readAdminFarms(signal), [])
+  const { state, reload } = useAdminChain(loadFarms)
 
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify(Object.fromEntries(rows.map((row) => [row.id, row.farmId]))),
-      )
-    } catch {
-      // Bỏ qua nếu trình duyệt chặn localStorage.
-    }
-  }, [rows])
+  const [form, setForm] = useState<AssignForm | null>(null)
+  const [formError, setFormError] = useState('')
+  const [progress, setProgress] = useState<AssignOperation | null>(null)
 
-  const trimmedFarmId = farmId.trim()
+  const farms = state.kind === 'ready' ? state.data.farms : []
 
   async function copyText(text: string, message: string) {
     try {
@@ -118,151 +83,236 @@ export function FarmsPage() {
     }
   }
 
-  function openMapping(row: FarmRow) {
-    setFarmId(row.farmId ?? '')
-    setEditRow(row)
+  function openAssign(address = '', farmId = '') {
+    setFormError('')
+    setForm({ address, farmId })
   }
 
-  function startMapping() {
-    if (!editRow || !trimmedFarmId) return
-    setProgress({ row: editRow, farmId: trimmedFarmId.toUpperCase() })
-    setEditRow(null)
+  function startAssign() {
+    if (!form) return
+    const address = form.address.trim()
+    const farmId = form.farmId.trim()
+    if (!isAddress(address)) {
+      setFormError('Địa chỉ ví không hợp lệ (0x + 40 ký tự hex).')
+      return
+    }
+    if (!farmId) {
+      setFormError('farmId không được để trống.')
+      return
+    }
+    setForm(null)
+    setFormError('')
+    void run({ address: address as `0x${string}`, farmId: farmId.toUpperCase() })
   }
 
-  function finishMapping() {
-    if (!progress) return
-    setRows((current) =>
-      current.map((item) =>
-        item.id === progress.row.id ? { ...item, farmId: progress.farmId } : item,
-      ),
-    )
-    showToast(`Đã gán ${progress.farmId} cho ${progress.row.name}`, 'success')
+  async function run(operation: AssignOperation) {
+    setProgress(operation)
+    flow.start()
+    try {
+      if (!session || session.source !== 'chain')
+        throw new TxError('precondition', 'Cần đăng nhập bằng ví thật để ký giao dịch.')
+      await sendTransaction(
+        session.wallet.address,
+        (contract) => contract.assignFarmer(operation.address, operation.farmId),
+        {
+          onSigning: () => flow.goTo(1),
+          onBroadcast: (hash) => {
+            flow.setTxHash(hash)
+            flow.goTo(3)
+          },
+        },
+      )
+      flow.goTo(4)
+      reload()
+      flow.succeed()
+      showToast(`Đã gán ${operation.farmId} cho ${shortAddress(operation.address)}`, 'success')
+    } catch (error) {
+      if (error instanceof TxError) flow.fail(error.message, error.kind === 'rejected')
+      else flow.fail('Đã xảy ra lỗi không xác định. Vui lòng thử lại.')
+    }
+  }
+
+  function closeProgress() {
     setProgress(null)
+    flow.reset()
   }
 
   return (
     <div className="farms-page">
       <PageHeader
         title="Farmer ↔ farmId"
-        description="Mỗi Farmer có một farmId do Admin gán. Farmer không thể tự sửa farmId khi tạo lô."
+        description="farmId đọc từ farmIdOf trên hợp đồng. assignFarmer vừa gán farmId vừa cấp vai trò Farmer; Farmer không thể tự sửa farmId khi tạo lô."
+        actions={
+          <Button type="button" onClick={() => openAssign()}>
+            Gán farmId cho ví khác
+          </Button>
+        }
       />
 
-      <section className="roles-card" aria-label="Danh sách Farmer và farmId">
-        <div className="roles-table-wrap">
-          <table className="roles-table farms-table">
-            <thead>
-              <tr>
-                <th>Ví farmer</th>
-                <th>Địa chỉ</th>
-                <th>FarmID</th>
-                <th>Số lô</th>
-                <th>Hành động</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.id}>
-                  <td>
-                    <strong className="farms-name">{row.name}</strong>
-                  </td>
-                  <td>
-                    <div className="farms-address">
-                      <span className="farms-address-line">
-                        <WalletIcon />
-                        <span className="mono">{shortAddress(row.address)}</span>
-                      </span>
-                      <button
-                        type="button"
-                        className="farms-copy"
-                        onClick={() => copyText(row.address, 'Đã sao chép địa chỉ ví')}
-                        aria-label={`Sao chép địa chỉ ${row.name}`}
-                        title="Sao chép địa chỉ ví"
-                      >
-                        <CopyIcon />
-                      </button>
-                    </div>
-                  </td>
-                  <td>
-                    {row.farmId ? (
-                      <span className="farms-farmid">{row.farmId}</span>
-                    ) : (
-                      <span className="farms-unassigned">Chưa gán</span>
-                    )}
-                  </td>
-                  <td className="farms-batches">{row.batches}</td>
-                  <td>
-                    {row.farmId ? (
-                      <Button
-                        variant="secondary"
-                        className="roles-action"
-                        onClick={() => openMapping(row)}
-                      >
-                        Thay mapping
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="secondary"
-                        className="roles-action"
-                        onClick={() => openMapping(row)}
-                      >
-                        Gán farmId
-                      </Button>
-                    )}
-                  </td>
+      {state.kind === 'loading' && (
+        <section className="roles-card">
+          <LoadingState label="Đang đọc farmId từ blockchain…" />
+        </section>
+      )}
+
+      {state.kind === 'error' && (
+        <ErrorState
+          title="Không đọc được danh sách Farmer"
+          description={state.message}
+          action={
+            <Button type="button" onClick={reload}>
+              Thử lại
+            </Button>
+          }
+        />
+      )}
+
+      {state.kind === 'ready' && (
+        <section className="roles-card" aria-label="Danh sách Farmer và farmId">
+          <div className="roles-table-wrap">
+            <table className="roles-table farms-table">
+              <thead>
+                <tr>
+                  <th>Ví farmer</th>
+                  <th>FarmID</th>
+                  <th>Số lô</th>
+                  <th>Hành động</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody>
+                {farms.map((row) => (
+                  <tr key={row.address}>
+                    <td>
+                      <div className="farms-identity">
+                        <span className="farms-address-line">
+                          <WalletIcon />
+                          <strong className="farms-name mono" title={row.address}>
+                            {shortAddress(row.address)}
+                          </strong>
+                          <button
+                            type="button"
+                            className="farms-copy"
+                            onClick={() => copyText(row.address, 'Đã sao chép địa chỉ ví')}
+                            aria-label={`Sao chép địa chỉ ${row.address}`}
+                            title={`Sao chép địa chỉ ví ${row.address}`}
+                          >
+                            <CopyIcon />
+                          </button>
+                        </span>
+                        {row.activeFarmer ? (
+                          <span className="farms-status">Farmer</span>
+                        ) : (
+                          <span className="farms-status revoked">Đã thu hồi quyền Farmer</span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      {row.farmId ? (
+                        <span className="farms-farmid">{row.farmId}</span>
+                      ) : (
+                        <span className="farms-unassigned">Chưa gán</span>
+                      )}
+                    </td>
+                    <td className="farms-batches">{row.batchCount}</td>
+                    <td>
+                      <Button
+                        variant="secondary"
+                        className="roles-action"
+                        onClick={() => openAssign(row.address, row.farmId ?? '')}
+                      >
+                        {row.farmId ? 'Thay mapping' : 'Gán farmId'}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+                {farms.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="roles-empty">
+                      Chưa có Farmer nào trên chain. Dùng nút “Gán farmId cho ví khác”.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <Modal
-        open={!!editRow}
-        onClose={() => setEditRow(null)}
-        title={`farmId cho ${editRow?.name ?? ''}`}
+        open={!!form}
+        onClose={() => setForm(null)}
+        title={`farmId cho ${form?.address ? shortAddress(form.address) : 'ví'}`}
         className="roles-modal"
         footer={
           <div className="farms-modal-foot">
             <div className="farms-modal-actions">
-              <Button variant="secondary" onClick={() => setEditRow(null)}>
+              <Button variant="secondary" onClick={() => setForm(null)}>
                 Hủy
               </Button>
-              <Button onClick={startMapping} disabled={!trimmedFarmId}>
-                Xác nhận giao dịch
-              </Button>
+              <Button onClick={startAssign}>Xác nhận giao dịch</Button>
             </div>
-            {!trimmedFarmId && <span className="farms-error">Nhập farmId.</span>}
+            {formError && <span className="farms-error">{formError}</span>}
           </div>
         }
       >
         <div className="farms-form">
+          <label htmlFor="farmer-address">Địa chỉ ví Farmer</label>
+          <input
+            id="farmer-address"
+            className="mono"
+            value={form?.address ?? ''}
+            onChange={(event) => {
+              setForm((current) => ({ address: event.target.value, farmId: current?.farmId ?? '' }))
+              setFormError('')
+            }}
+            placeholder="0x…"
+            autoFocus
+          />
           <label htmlFor="farm-id">farmId</label>
           <input
             id="farm-id"
-            value={farmId}
-            onChange={(event) => setFarmId(event.target.value.toUpperCase())}
-            autoFocus
+            value={form?.farmId ?? ''}
+            onChange={(event) => {
+              setForm((current) => ({
+                address: current?.address ?? '',
+                farmId: event.target.value.toUpperCase(),
+              }))
+              setFormError('')
+            }}
+            placeholder="FARM-A"
           />
-          <span className="farms-hint">Ví dụ FARM-A</span>
-          <p className="farms-note">Thay farmId không đổi dữ liệu các lô đã tạo.</p>
+          <span className="farms-hint">Ví dụ FARM-A. farmId được ghi cố định vào lô lúc tạo.</span>
+          <p className="farms-note">
+            Thay farmId không đổi dữ liệu các lô đã tạo; lô mới dùng farmId mới. Gán farmId đồng
+            thời cấp vai trò Farmer trên hợp đồng.
+          </p>
         </div>
       </Modal>
 
       <TxProgressModal
         open={!!progress}
-        onClose={() => setProgress(null)}
-        title={`Gán ${progress?.farmId ?? ''} cho ${progress?.row.name ?? ''}`}
-        method="setFarmId()"
+        onClose={closeProgress}
+        title={`Gán ${progress?.farmId ?? ''} cho ${progress ? shortAddress(progress.address) : ''}`}
+        method="assignFarmer(address, farmId)"
         summary={
           progress
             ? [
-                { label: 'Ví', value: progress.row.name },
+                {
+                  label: 'Ví',
+                  value: <span className="mono">{shortAddress(progress.address)}</span>,
+                },
                 { label: 'farmId', value: progress.farmId },
               ]
             : []
         }
-        txHash={progress ? (TX_HASHES[progress.row.id] ?? FALLBACK_TX_HASH) : FALLBACK_TX_HASH}
-        onFinish={finishMapping}
+        steps={TX_STEPS}
+        flow={flow.state}
+        successNote={
+          progress
+            ? `Đã gán ${progress.farmId}. Danh sách bên dưới đã đọc lại từ contract.`
+            : undefined
+        }
+        onRetry={progress ? () => void run(progress) : undefined}
       />
     </div>
   )

@@ -1,16 +1,15 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { PageHeader } from '../../components/ui'
-import { LIFECYCLE_PILL, BATCH_ROWS } from './batchFixtures'
-import { INCIDENTS } from './incidentFixtures'
-import { useRecalls } from './incidentStore'
+import { Button, ErrorState, LoadingState, PageHeader } from '../../components/ui'
+import { useToast } from '../../components/ui/toast'
+import { ipfsFileUrl } from '../public/services/publicChainReader'
+import { formatTime, LIFECYCLE_PILL, shortAddress, shortCid } from './format'
+import { useAdminChain } from './hooks/useAdminChain'
+import { readAdminIncidents } from './services/adminChain'
+import './styles/batches.css'
 import './styles/incidents.css'
 
 type IncidentFilter = 'all' | 'open' | 'recalled'
-
-function shortAddress(address: string): string {
-  return `${address.slice(0, 7)}...${address.slice(-4)}`
-}
 
 function WalletIcon() {
   return (
@@ -55,21 +54,24 @@ function WarningIcon() {
 }
 
 export function IncidentsPage() {
-  const recalls = useRecalls()
+  const { showToast } = useToast()
+  const loadIncidents = useCallback((signal: AbortSignal) => readAdminIncidents(signal), [])
+  const { state, reload } = useAdminChain(loadIncidents)
   const [filter, setFilter] = useState<IncidentFilter>('all')
 
-  async function copyAddress(address: string) {
+  async function copyText(text: string, message: string) {
     try {
-      await navigator.clipboard.writeText(address)
+      await navigator.clipboard.writeText(text)
+      showToast(message, 'success')
     } catch {
-      // Bỏ qua nếu trình duyệt chặn clipboard.
+      showToast('Không thể sao chép trên trình duyệt này', 'error')
     }
   }
 
-  const rows = INCIDENTS.filter((incident) => {
-    const recalled = !!recalls[incident.batchCode]
-    if (filter === 'open') return !recalled
-    if (filter === 'recalled') return recalled
+  const incidents = state.kind === 'ready' ? state.data.incidents : []
+  const rows = incidents.filter((incident) => {
+    if (filter === 'open') return !incident.batchRecalled
+    if (filter === 'recalled') return incident.batchRecalled
     return true
   })
 
@@ -77,7 +79,7 @@ export function IncidentsPage() {
     <div className="incidents-page">
       <PageHeader
         title="Sự cố & thu hồi"
-        description="Sự cố do Retailer báo cáo. Admin điều tra và thu hồi từng lô riêng, kèm lý do và bằng chứng."
+        description="Sự cố đọc từ event IncidentReported, đối chiếu getIncident và getBatch. Admin điều tra và thu hồi từng lô riêng, kèm lý do và bằng chứng."
         actions={
           <select
             value={filter}
@@ -91,98 +93,132 @@ export function IncidentsPage() {
         }
       />
 
-      <section className="incidents-card" aria-label="Danh sách sự cố">
-        <div className="incidents-table-wrap">
-          <table className="incidents-table">
-            <thead>
-              <tr>
-                <th>INCIDENTID</th>
-                <th>LÔ</th>
-                <th>NGƯỜI BÁO</th>
-                <th>THỜI GIAN</th>
-                <th>MÔ TẢ</th>
-                <th>TRẠNG THÁI</th>
-                <th aria-label="Hành động" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((incident) => {
-                const recalled = !!recalls[incident.batchCode]
-                const lifecycle = BATCH_ROWS.find(
-                  (row) => row.code === incident.batchCode,
-                )?.lifecycle
-                return (
-                  <tr key={incident.id}>
-                    <td className="incidents-id-cell">
-                      <Link className="incidents-id" to={`/admin/incidents/${incident.id}`}>
-                        {incident.id}
-                      </Link>
-                    </td>
-                    <td>
-                      <div className="incidents-batch">
-                        <Link to={`/admin/batches/${incident.batchCode}`}>
-                          {incident.batchCode}
-                        </Link>
-                        <span>
-                          {incident.farmId} / {incident.harvestGroupId}
-                        </span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="incidents-reporter">
-                        <WalletIcon />
-                        <strong>{incident.reporter}</strong>
-                        <span className="mono">{shortAddress(incident.reporterAddress)}</span>
-                        <button
-                          type="button"
-                          className="incident-copy"
-                          aria-label={`Sao chép địa chỉ ví ${incident.reporter}`}
-                          title={`Sao chép địa chỉ ví ${incident.reporter}`}
-                          onClick={() => copyAddress(incident.reporterAddress)}
-                        >
-                          <CopyIcon />
-                        </button>
-                      </span>
-                    </td>
-                    <td className="incidents-time-cell">{incident.time}</td>
-                    <td className="incidents-desc-cell">{incident.description}</td>
-                    <td>
-                      <span className="incidents-status-cell">
-                        {lifecycle && (
-                          <span className={`batch-status ${lifecycle.toLowerCase()}`}>
-                            {LIFECYCLE_PILL[lifecycle]}
-                          </span>
-                        )}
-                        {recalled && (
-                          <span className="batch-status recalled">
-                            <WarningIcon />
-                            Đã thu hồi
-                          </span>
-                        )}
-                      </span>
-                    </td>
-                    <td className="incidents-action-cell">
-                      <Link
-                        className="incidents-investigate"
-                        to={`/admin/incidents/${incident.id}`}
-                      >
-                        Điều tra <span className="incidents-arrow">→</span>
-                      </Link>
-                    </td>
+      {state.kind === 'loading' && (
+        <section className="incidents-card">
+          <LoadingState label="Đang đọc sự cố từ blockchain…" />
+        </section>
+      )}
+
+      {state.kind === 'error' && (
+        <ErrorState
+          title="Không đọc được danh sách sự cố"
+          description={state.message}
+          action={
+            <Button type="button" onClick={reload}>
+              Thử lại
+            </Button>
+          }
+        />
+      )}
+
+      {state.kind === 'ready' && (
+        <>
+          <section className="incidents-card" aria-label="Danh sách sự cố">
+            <div className="incidents-table-wrap">
+              <table className="incidents-table">
+                <thead>
+                  <tr>
+                    <th>INCIDENTID</th>
+                    <th>LÔ</th>
+                    <th>NGƯỜI BÁO</th>
+                    <th>THỜI GIAN</th>
+                    <th>BÁO CÁO</th>
+                    <th>TRẠNG THÁI</th>
+                    <th aria-label="Hành động" />
                   </tr>
-                )
-              })}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="incidents-empty">
-                    Không có sự cố phù hợp.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+                </thead>
+                <tbody>
+                  {rows.map((incident) => (
+                    <tr key={incident.incidentId}>
+                      <td className="incidents-id-cell">
+                        <Link
+                          className="incidents-id"
+                          to={`/admin/incidents/${incident.incidentId}`}
+                        >
+                          #{incident.incidentId}
+                        </Link>
+                      </td>
+                      <td>
+                        <div className="incidents-batch">
+                          <Link to={`/admin/batches/${incident.batchCode}`}>
+                            {incident.batchCode}
+                          </Link>
+                          <span>
+                            {incident.farmId} / {incident.harvestGroupId}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="incidents-reporter">
+                          <WalletIcon />
+                          <span className="mono" title={incident.reporter}>
+                            {shortAddress(incident.reporter)}
+                          </span>
+                          <button
+                            type="button"
+                            className="incident-copy"
+                            aria-label={`Sao chép địa chỉ ví ${incident.reporter}`}
+                            title="Sao chép địa chỉ người báo"
+                            onClick={() =>
+                              copyText(incident.reporter, 'Đã sao chép địa chỉ người báo')
+                            }
+                          >
+                            <CopyIcon />
+                          </button>
+                        </span>
+                      </td>
+                      <td className="incidents-time-cell">{formatTime(incident.reportedAt)}</td>
+                      <td>
+                        <a
+                          className="incidents-report-link mono"
+                          href={ipfsFileUrl(incident.reportCid)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title={`Mở báo cáo trên IPFS: ${incident.reportCid}`}
+                        >
+                          {shortCid(incident.reportCid)}
+                        </a>
+                      </td>
+                      <td>
+                        <span className="incidents-status-cell">
+                          <span className={`batch-status ${incident.lifecycle.toLowerCase()}`}>
+                            {LIFECYCLE_PILL[incident.lifecycle]}
+                          </span>
+                          {incident.batchRecalled && (
+                            <span className="batch-status recalled">
+                              <WarningIcon />
+                              Đã thu hồi
+                            </span>
+                          )}
+                        </span>
+                      </td>
+                      <td className="incidents-action-cell">
+                        <Link
+                          className="incidents-investigate"
+                          to={`/admin/incidents/${incident.incidentId}`}
+                        >
+                          Điều tra <span className="incidents-arrow">→</span>
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                  {rows.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="incidents-empty">
+                        Không có sự cố phù hợp.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <p className="admin-metrics" role="status">
+            Đọc từ chain: {incidents.length} sự cố · {state.data.metrics.events} event ·{' '}
+            {state.data.metrics.rpcCalls} RPC · {state.data.metrics.durationMs} ms
+          </p>
+        </>
+      )}
     </div>
   )
 }

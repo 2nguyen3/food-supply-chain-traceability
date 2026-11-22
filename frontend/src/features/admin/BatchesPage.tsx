@@ -1,15 +1,14 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { PageHeader } from '../../components/ui'
+import { Button, ErrorState, LoadingState, PageHeader } from '../../components/ui'
 import { useToast } from '../../components/ui/toast'
 import type { Lifecycle } from '../../domain/types'
-import { BATCH_ROWS, LIFECYCLE_PILL } from './batchFixtures'
-import { useRecalls } from './incidentStore'
+import { formatTime, LIFECYCLE_PILL, shortAddress } from './format'
+import { useAdminChain } from './hooks/useAdminChain'
+import { readAdminBatches } from './services/adminChain'
 import './styles/batches.css'
 
-function shortAddress(address: string): string {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`
-}
+type BatchFilter = 'all' | Lifecycle | 'recalled' | 'expired'
 
 function WalletIcon() {
   return (
@@ -39,20 +38,42 @@ function CopyIcon() {
   )
 }
 
+function AlertIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 3.5 2.8 20h18.4L12 3.5Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinejoin="round"
+      />
+      <path d="M12 9v5M12 17h.01" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 export function BatchesPage() {
   const { showToast } = useToast()
-  const recalls = useRecalls()
+  const loadBatches = useCallback((signal: AbortSignal) => readAdminBatches(signal), [])
+  const { state, reload } = useAdminChain(loadBatches)
   const [query, setQuery] = useState('')
-  const [status, setStatus] = useState<'all' | Lifecycle | 'recalled'>('all')
+  const [status, setStatus] = useState<BatchFilter>('all')
 
   const term = query.trim().toLowerCase()
-  const rows = BATCH_ROWS.filter((row) => {
-    const recalled = !!recalls[row.code]
+  const batches = state.kind === 'ready' ? state.data.batches : []
+  const rows = batches.filter((row) => {
     const matchesTerm =
       !term ||
-      `${row.code} ${row.farmId} ${row.groupId} ${row.ownerLabel}`.toLowerCase().includes(term)
+      `${row.batchCode} ${row.farmId} ${row.harvestGroupId} ${row.owner} ${row.tokenId}`
+        .toLowerCase()
+        .includes(term)
     const matchesStatus =
-      status === 'all' || (status === 'recalled' ? recalled : row.lifecycle === status)
+      status === 'all' ||
+      (status === 'recalled'
+        ? row.recalled
+        : status === 'expired'
+          ? row.expired
+          : row.lifecycle === status)
     return matchesTerm && matchesStatus
   })
 
@@ -69,7 +90,7 @@ export function BatchesPage() {
     <div className="batches-page">
       <PageHeader
         title="Tất cả lô"
-        description="Danh sách toàn bộ lô trên hệ thống. Admin không xem được hóa đơn riêng nếu chưa được cấp quyền."
+        description="Danh sách toàn bộ lô đọc từ event BatchCreated; trạng thái, hết hạn và thu hồi đối chiếu getBatch/isExpired. Admin không xem được hóa đơn riêng nếu chưa được cấp quyền."
       />
 
       <section className="batches-card" aria-label="Danh sách lô hàng">
@@ -78,12 +99,12 @@ export function BatchesPage() {
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Tìm theo mã lô..."
-            aria-label="Tìm theo mã lô"
+            placeholder="Tìm theo mã lô, farmId, nhóm, ví…"
+            aria-label="Tìm theo mã lô, farmId, nhóm hoặc ví"
           />
           <select
             value={status}
-            onChange={(event) => setStatus(event.target.value as 'all' | Lifecycle | 'recalled')}
+            onChange={(event) => setStatus(event.target.value as BatchFilter)}
             aria-label="Lọc theo trạng thái"
           >
             <option value="all">Tất cả trạng thái</option>
@@ -91,86 +112,118 @@ export function BatchesPage() {
             <option value="InTransit">InTransit · Đang vận chuyển</option>
             <option value="Delivered">Delivered · Đã giao</option>
             <option value="Sold">Sold · Đã bán</option>
+            <option value="expired">Đã hết hạn</option>
             <option value="recalled">Đã thu hồi</option>
           </select>
           <span className="batches-count">{rows.length} lô</span>
         </div>
 
-        <div className="batches-table-wrap">
-          <table className="batches-table">
-            <thead>
-              <tr>
-                <th>Mã lô</th>
-                <th>Token</th>
-                <th>Farm</th>
-                <th>Nhóm</th>
-                <th>Chủ sở hữu NFT</th>
-                <th>Trạng thái</th>
-                <th>Hạn dùng</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.code}>
-                  <td>
-                    <div className="batches-code">
-                      <Link to={`/admin/batches/${row.code}`}>{row.code}</Link>
-                      <span>{row.weightKg.toLocaleString('vi-VN')} kg · 1 NFT</span>
-                    </div>
-                  </td>
-                  <td>
-                    <span className="batches-token">#{row.tokenId}</span>
-                  </td>
-                  <td>
-                    <div className="batches-farm">
-                      <strong>{row.farmId}</strong>
-                    </div>
-                  </td>
-                  <td>
-                    <span className="batches-group">{row.groupId}</span>
-                  </td>
-                  <td>
-                    <div className="batches-owner">
-                      <span className="batches-owner-label">
-                        <WalletIcon />
-                        {row.ownerLabel}
-                      </span>
-                      <span className="mono">{shortAddress(row.ownerAddress)}</span>
-                      <button
-                        type="button"
-                        className="batches-copy"
-                        onClick={() => copyAddress(row.ownerAddress)}
-                        aria-label={`Sao chép địa chỉ ${row.ownerLabel}`}
-                        title="Sao chép địa chỉ ví"
-                      >
-                        <CopyIcon />
-                      </button>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="batches-status-cell">
-                      <span className={`batch-status ${row.lifecycle.toLowerCase()}`}>
-                        {LIFECYCLE_PILL[row.lifecycle]}
-                      </span>
-                      {recalls[row.code] && (
-                        <span className="batch-status recalled">Đã thu hồi</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="batches-expiry">{row.expiration}</td>
-                </tr>
-              ))}
-              {rows.length === 0 && (
+        {state.kind === 'loading' && <LoadingState label="Đang đọc danh sách lô từ blockchain…" />}
+
+        {state.kind === 'error' && (
+          <ErrorState
+            title="Không đọc được danh sách lô"
+            description={state.message}
+            action={
+              <Button type="button" onClick={reload}>
+                Thử lại
+              </Button>
+            }
+          />
+        )}
+
+        {state.kind === 'ready' && (
+          <div className="batches-table-wrap">
+            <table className="batches-table">
+              <thead>
                 <tr>
-                  <td colSpan={7} className="batches-empty">
-                    Không tìm thấy lô phù hợp.
-                  </td>
+                  <th>Mã lô</th>
+                  <th>Token</th>
+                  <th>Farm</th>
+                  <th>Nhóm</th>
+                  <th>Chủ sở hữu NFT</th>
+                  <th>Trạng thái</th>
+                  <th>Hạn dùng</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.tokenId}>
+                    <td>
+                      <div className="batches-code">
+                        <Link to={`/admin/batches/${row.batchCode}`}>{row.batchCode}</Link>
+                        <span>
+                          {row.quantityKg.toLocaleString('vi-VN')} kg · tạo{' '}
+                          {row.createdAt ? formatTime(row.createdAt) : '—'}
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="batches-token">#{row.tokenId}</span>
+                    </td>
+                    <td>
+                      <div className="batches-farm">
+                        <strong>{row.farmId}</strong>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="batches-group">{row.harvestGroupId}</span>
+                    </td>
+                    <td>
+                      <div className="batches-owner">
+                        <span className="batches-owner-label">
+                          <WalletIcon />
+                          <span className="mono" title={row.owner}>
+                            {shortAddress(row.owner)}
+                          </span>
+                        </span>
+                        <button
+                          type="button"
+                          className="batches-copy"
+                          onClick={() => copyAddress(row.owner)}
+                          aria-label={`Sao chép địa chỉ ${row.owner}`}
+                          title="Sao chép địa chỉ ví"
+                        >
+                          <CopyIcon />
+                        </button>
+                      </div>
+                    </td>
+                    <td>
+                      <div className="batches-status-cell">
+                        <span className={`batch-status ${row.lifecycle.toLowerCase()}`}>
+                          {LIFECYCLE_PILL[row.lifecycle]}
+                        </span>
+                        {row.expired && <span className="batch-status expired">Đã hết hạn</span>}
+                        {row.recalled && (
+                          <span className="batch-status recalled">
+                            <AlertIcon />
+                            Đã thu hồi
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="batches-expiry">{formatTime(row.expiryDate)}</td>
+                  </tr>
+                ))}
+                {rows.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="batches-empty">
+                      Không tìm thấy lô phù hợp.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
+
+      {state.kind === 'ready' && (
+        <p className="admin-metrics" role="status">
+          Đọc từ chain: {batches.length} lô · {state.data.metrics.events} event ·{' '}
+          {state.data.metrics.rpcCalls} RPC · {state.data.metrics.durationMs} ms
+        </p>
+      )}
     </div>
   )
 }

@@ -49,6 +49,22 @@ export interface DemoDocument {
   verified?: 'match' | 'mismatch' | 'unavailable'
 }
 
+/** Lý do thu hồi đọc từ event BatchRecalled và manifest JSON đã đối chiếu hash trên chain. */
+export interface DemoRecall {
+  incidentId: number
+  admin?: string
+  at?: string
+  transactionHash?: string
+  reasonCid: string
+  reasonHash: string
+  /** Manifest JSON lý do thu hồi (CID ghi trên chain) kèm kết quả đối chiếu SHA-256. */
+  manifest?: DemoDocument
+  /** Lý do chỉ hiển thị khi manifest đúng schema và hash khớp chain. */
+  reasonText?: string
+  /** PDF gốc khai báo trong manifest, đã đối chiếu SHA-256 trên byte tải về. */
+  pdf?: DemoDocument
+}
+
 export interface DemoBatch {
   code: string
   tokenId: string
@@ -56,6 +72,8 @@ export interface DemoBatch {
   harvestGroupId: string
   lifecycle: Lifecycle
   recalled: boolean
+  /** Thông tin thu hồi chi tiết (chỉ có khi đọc chain thật và lô đã bị thu hồi). */
+  recall?: DemoRecall
   owner: DemoActor
   farmer: DemoActor
   quantityKg: 1000

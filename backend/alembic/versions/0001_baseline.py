@@ -1,7 +1,7 @@
 """baseline
 
 Revision ID: 0001
-Revises: 
+Revises:
 Create Date: 2026-10-22
 
 """
