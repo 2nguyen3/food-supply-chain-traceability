@@ -83,12 +83,16 @@ class ChainClient:
         except ContractLogicError:
             return None
 
-    def get_batch_created(self, tx_hash: str) -> dict:
-        """Đọc receipt của giao dịch createBatch: trả farmer, tokenId, metadataCID, metadataHash.
 
-        ReceiptNotFound nếu chưa có receipt; ReceiptInvalid nếu status != 1, không gửi tới contract
-        hoặc không có event BatchCreated do contract này phát.
+    def get_batch_created(self, tx_hash: str) -> dict:
+        """Đọc receipt và xác minh sự kiện BatchCreated từ đúng Smart Contract.
+
+        Hỗ trợ giao dịch trực tiếp và giao dịch qua DelegationManager.
+        ReceiptNotFound nếu chưa có receipt.
+        ReceiptInvalid nếu giao dịch thất bại hoặc không có đúng
+        một sự kiện BatchCreated do contract này phát ra.
         """
+
         try:
             receipt = self._w3.eth.get_transaction_receipt(tx_hash)
         except TransactionNotFound:
@@ -97,8 +101,12 @@ class ChainClient:
             raise ChainUnavailable(str(exc)) from exc
         if receipt["status"] != 1:
             raise ReceiptInvalid("Giao dịch thất bại (status != 1)")
-        if receipt["to"] is None or receipt["to"].lower() != self._contract.address.lower():
-            raise ReceiptInvalid("Giao dịch không gửi tới contract này")
+
+        # Giao dịch thông qua MetaMask Delegation có thể được gửi
+        # đến DelegationManager thay vì trực tiếp đến CocoMark.
+        # Xác minh contract đích bằng địa chỉ phát sự kiện
+        # BatchCreated trong receipt, không dùng receipt["to"].
+
         try:
             events = self._contract.events.BatchCreated().process_receipt(receipt, errors=DISCARD)
         except Web3Exception as exc:
