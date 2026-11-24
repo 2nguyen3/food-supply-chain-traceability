@@ -51,3 +51,17 @@ Lưu ý nguồn deploy: Render đọc code đã có trên GitHub. Repository hi�
 - Docker image local `cocomark-backend-step8:local` build đạt bằng context sạch cùng source ngoài iCloud; pip check trong image đạt. Chạy image không env bị chặn đúng trước migration (exit 1, thiếu cấu hình). Đây là image ARM64 local; chưa xác nhận build/chạy trên Render. Neon thật đã migration bằng runtime backend đúng lockfile trên máy local.
 - Neon: trước migration tables=[]; sau migration có alembic_version, auth_nonces, sessions, document_grants, documents; revision=0003. Xác nhận psycopg pgconn.ssl_in_use=True cho chặng client-to-Neon. pg_stat_ssl phía database trả False do proxy, không dùng chỉ số đó để kết luận chặng client không TLS. Không chạy pytest/seed trên DB deploy và không in mật khẩu/URL kết nối.
 - Chưa dùng browser để nghiệm thu bản hosted, chưa tạo dữ liệu on-chain demo hoặc kết luận bước 08 hoàn tất.
+
+## Cập nhật frontend HTTPS và chuẩn bị Render
+
+- Commit `3566d9f` đã được push lên nhánh nguyen, có backend/Dockerfile.
+- Nini đã deploy frontend Vercel; URL công khai https://cocomark.vercel.app trả HTTP 200 ngày 26/11/2026. Chưa nghiệm thu chức năng hosting; frontend ban đầu chưa có VITE_API_BASE_URL.
+- Đã đặt ALLOWED_ORIGIN=https://cocomark.vercel.app và AUTH_DOMAIN=cocomark.vercel.app trong .env.hosting ignored; validation startup backend PASS. Các giá trị này cần được cập nhật riêng trên Render, không tự đồng bộ từ file local.
+- Render vẫn ở màn cấu hình, chưa có URL API hoặc deployment thành công được xác minh. Sau khi deploy API cần điền VITE_API_BASE_URL và redeploy frontend, kiểm tra Production Branch nguyen.
+
+## Backend Render HTTPS đã phản hồi
+
+- URL https://cocomark-api.onrender.com; /health trả HTTP 200 với status ok ngày 26/11/2026.
+- OPTIONS /auth/challenge từ Origin https://cocomark.vercel.app trả 200 và allow-origin đúng frontend.
+- POST /auth/challenge tạo nonce thật thành công, domain=cocomark.vercel.app, chain_id=11155111. Chưa ký ví, chưa có nghiệm thu session/upload/private docs hoặc giao dịch testnet.
+- Đã điền VITE_API_BASE_URL=https://cocomark-api.onrender.com trong .env.hosting local; cần thêm riêng trên Vercel và redeploy. File Downloads cocomark-vercel.env ban đầu vẫn chỉ có 5 biến, không chứa API URL mới.
