@@ -1,4 +1,4 @@
-import { BrowserProvider, getAddress } from 'ethers'
+import { getAddress, hexlify, toUtf8Bytes } from 'ethers'
 import { config, networkName } from '../config/env'
 
 export interface Eip1193Provider {
@@ -136,9 +136,17 @@ function toSwitchError(error: unknown): WalletError {
 export async function signLoginMessage(address: string, message: string): Promise<string> {
   const ethereum = requireEthereum()
   try {
-    const signer = await new BrowserProvider(ethereum).getSigner(address)
-    return await signer.signMessage(message)
+    const accounts = (await ethereum.request({ method: "eth_requestAccounts" })) as string[]
+    const signerAddr =
+      accounts?.find((a) => a.toLowerCase() === address.toLowerCase()) ?? address.toLowerCase()
+    const hexMessage = hexlify(toUtf8Bytes(message))
+    const sig = await ethereum.request({
+      method: "personal_sign",
+      params: [hexMessage, signerAddr],
+    })
+    return String(sig)
   } catch (error) {
+    console.error("signLoginMessage error:", error)
     throw toWalletError(error)
   }
 }
