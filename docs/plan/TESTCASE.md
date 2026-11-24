@@ -379,70 +379,70 @@ Dùng ví **Admin** (#0, `0xf39F…2266`). Mã mục: `AD`. Dữ liệu seed: m�
 
 ### Luồng AA. Tổng quan
 
-- [ ] **AD01** `/admin/overview`: không còn số liệu mẫu; tổng số lô, số sự cố, số lô đã thu hồi lấy từ chain.
-- [ ] **AD02** Chain mới sau seed: 6 lô, 1 sự cố, 1 lô thu hồi (COCONUT-005); các con số khớp trang công khai.
-- [ ] **AD03** Sau khi Farmer tạo thêm lô, tải lại: số lô tăng.
-- [ ] **AD04** Mở một lô hoặc sự cố từ trang tổng quan: sang đúng trang chi tiết.
+- [x] **AD01** `/admin/overview`: không còn số liệu mẫu; tổng số lô, số sự cố, số lô đã thu hồi lấy từ chain.
+- [x] **AD02** Chain mới sau seed: 6 lô, 1 sự cố, 1 lô thu hồi (COCONUT-005); các con số khớp trang công khai.
+- [x] **AD03** Sau khi Farmer tạo thêm lô, tải lại: số lô tăng.
+- [x] **AD04** Mở một lô hoặc sự cố từ trang tổng quan: sang đúng trang chi tiết.
 
 ### Luồng AB. Vai trò
 
-- [ ] **AD05** `/admin/roles` liệt kê thành viên theo vai trò, đọc từ contract: Admin (#0), Farmer (#1, #2), Logistics (#3), Retailer (#4).
-- [ ] **AD06** Cấp vai trò Logistics cho ví #5: nhập địa chỉ, MetaMask xác nhận, báo thành công kèm txHash; ví #5 xuất hiện trong danh sách Logistics.
-- [ ] **AD07** Địa chỉ sai định dạng hoặc rỗng: báo lỗi, không gửi giao dịch.
-- [ ] **AD08** **Từ chối** ký khi cấp quyền: báo từ chối, danh sách không đổi.
-- [ ] **AD09** Đăng nhập bằng ví #5: vào được `/logistics/overview` (đã có vai trò Logistics); trước khi cấp thì thấy "Chưa được cấp quyền".
-- [ ] **AD10** Quay lại Admin, thu hồi vai trò Logistics của ví #5: xác nhận, ví #5 biến khỏi danh sách.
-- [ ] **AD11** Ví #5 đăng nhập lại: không còn vào được trang Logistics.
-- [ ] **AD12** Ví #5 đang mở dashboard Logistics khi bị thu hồi: thao tác ghi kế tiếp bị contract chặn và báo lỗi rõ (không báo thành công giả).
-- [ ] **AD13** Cấp thêm vai trò Retailer cho ví #5 khi đã có Logistics: ví đó vào được cả hai nhóm trang.
-- [ ] **AD14** Mỗi lần cấp hoặc thu hồi có event trên chain (kiểm bằng txHash trong trình khám phá hoặc log của Hardhat).
+- [x] **AD05** `/admin/roles` liệt kê thành viên theo vai trò, đọc từ contract: Admin (#0), Farmer (#1, #2), Logistics (#3), Retailer (#4).
+- [x] **AD06** Cấp vai trò Logistics cho ví #5: nhập địa chỉ, MetaMask xác nhận, báo thành công kèm txHash; ví #5 xuất hiện trong danh sách Logistics.
+- [x] **AD07** Địa chỉ sai định dạng hoặc rỗng: báo lỗi, không gửi giao dịch.
+- [x] **AD08** **Từ chối** ký khi cấp quyền: báo từ chối, danh sách không đổi.
+- [x] **AD09** Đăng nhập bằng ví #5: vào được `/logistics/overview` (đã có vai trò Logistics); trước khi cấp thì thấy "Chưa được cấp quyền".
+- [x] **AD10** Quay lại Admin, thu hồi vai trò Logistics của ví #5: xác nhận, ví #5 biến khỏi danh sách.
+- [x] **AD11** Ví #5 đăng nhập lại: không còn vào được trang Logistics.
+- [x] **AD12** Ví #5 đang mở dashboard Logistics khi bị thu hồi: thao tác ghi kế tiếp bị contract chặn và báo lỗi rõ (không báo thành công giả).
+- [x] **AD13** Cấp thêm vai trò Retailer cho ví #5 khi đã có Logistics: ví đó vào được cả hai nhóm trang.
+- [x] **AD14** Mỗi lần cấp hoặc thu hồi có event trên chain (kiểm bằng txHash trong trình khám phá hoặc log của Hardhat).
 
 ### Luồng AC. Trang trại (gán farmId)
 
-- [ ] **AD15** `/admin/farms` hiện danh sách Farmer kèm farmId đọc từ chain: `FARM-A`, `FARM-B`.
-- [ ] **AD16** Gán farmId `FARM-C` cho ví #5: xác nhận trong MetaMask, báo thành công; ví #5 trở thành Farmer (vào được `/farmer/overview`, Tạo lô hiện Farm ID `FARM-C`).
-- [ ] **AD17** farmId rỗng hoặc ví rỗng: báo lỗi, không gửi giao dịch.
-- [ ] **AD18** **Từ chối** ký: không có thay đổi.
-- [ ] **AD19** Ví chưa được gán farmId (chưa qua AD16) thì không tạo được lô: `/farmer/create` không cho đi tiếp và báo thiếu farmId.
-- [ ] **AD20** Đổi farmId của một Farmer đã có: lô cũ giữ farmId cũ (farmId ghi vào lô lúc tạo), lô mới dùng farmId mới.
+- [x] **AD15** `/admin/farms` hiện danh sách Farmer kèm farmId đọc từ chain: `FARM-A`, `FARM-B`.
+- [x] **AD16** Gán farmId `FARM-C` cho ví #5: xác nhận trong MetaMask, báo thành công; ví #5 trở thành Farmer (vào được `/farmer/overview`, Tạo lô hiện Farm ID `FARM-C`).
+- [x] **AD17** farmId rỗng hoặc ví rỗng: báo lỗi, không gửi giao dịch.
+- [x] **AD18** **Từ chối** ký: không có thay đổi.
+- [x] **AD19** Ví chưa được gán farmId (chưa qua AD16) thì không tạo được lô: `/farmer/create` không cho đi tiếp và báo thiếu farmId.
+- [x] **AD20** Đổi farmId của một Farmer đã có: lô cũ giữ farmId cũ (farmId ghi vào lô lúc tạo), lô mới dùng farmId mới.
 
 ### Luồng AD. Sự cố và truy ngược
 
 Điều kiện: ở luồng RD, Retailer đã báo sự cố cho **COCONUT-001** (Sold). COCONUT-001 và 002 cùng FARM-A và HG-A01; 003 cùng FARM-A nhưng HG-A02; 004 thuộc FARM-B.
 
-- [ ] **AD21** `/admin/incidents` liệt kê sự cố từ event `IncidentReported`: có sự cố #1 (COCONUT-005) và sự cố mới (COCONUT-001), kèm người báo, thời gian theo giờ block.
-- [ ] **AD22** Mở một sự cố: hiện báo cáo (CID, `ipfs://CID`, URL gateway, SHA-256), mở được PDF, hash khớp với hash trên chain.
-- [ ] **AD23** Truy ngược sự cố của COCONUT-001: hiện đường đi Farmer A → Logistics → Retailer, farmId `FARM-A`, harvestGroupId `HG-A01`, và lý do lô được đưa vào diện xem xét.
-- [ ] **AD24** "Lô liên quan" của sự cố 001 chỉ có **COCONUT-002** (cùng farmId + harvestGroupId).
-- [ ] **AD25** COCONUT-003 (cùng trang trại, khác nhóm) và COCONUT-004 (khác trang trại) **không** nằm trong diện xem xét; giao diện nói rõ là danh sách xem xét, chưa kết luận nhiễm khuẩn.
-- [ ] **AD26** Sự cố #1 (COCONUT-005): hiện lô đã thu hồi và liên kết tới quyết định thu hồi.
-- [ ] **AD27** Thời gian truy ngược đo thực tế: ghi lại số event, số lần gọi RPC và thời gian (mục tiêu vài giây) vào báo cáo.
-- [ ] **AD28** Mở tay mã sự cố không tồn tại: báo không tìm thấy sự cố.
-- [ ] **AD29** `/admin/batches` liệt kê mọi lô trên chain (6 lô seed trở lên), có lọc theo trạng thái, hết hạn, thu hồi.
-- [ ] **AD30** Mở chi tiết một lô: hồ sơ, nhiệt độ, hành trình, QR giống trang công khai nhưng có nút thu hồi.
+- [x] **AD21** `/admin/incidents` liệt kê sự cố từ event `IncidentReported`: có sự cố #1 (COCONUT-005) và sự cố mới (COCONUT-001), kèm người báo, thời gian theo giờ block.
+- [x] **AD22** Mở một sự cố: hiện báo cáo (CID, `ipfs://CID`, URL gateway, SHA-256), mở được PDF, hash khớp với hash trên chain.
+- [x] **AD23** Truy ngược sự cố của COCONUT-001: hiện đường đi Farmer A → Logistics → Retailer, farmId `FARM-A`, harvestGroupId `HG-A01`, và lý do lô được đưa vào diện xem xét.
+- [x] **AD24** "Lô liên quan" của sự cố 001 chỉ có **COCONUT-002** (cùng farmId + harvestGroupId).
+- [x] **AD25** COCONUT-003 (cùng trang trại, khác nhóm) và COCONUT-004 (khác trang trại) **không** nằm trong diện xem xét; giao diện nói rõ là danh sách xem xét, chưa kết luận nhiễm khuẩn.
+- [x] **AD26** Sự cố #1 (COCONUT-005): hiện lô đã thu hồi và liên kết tới quyết định thu hồi.
+- [x] **AD27** Thời gian truy ngược đo thực tế: ghi lại số event, số lần gọi RPC và thời gian (mục tiêu vài giây) vào báo cáo.
+- [x] **AD28** Mở tay mã sự cố không tồn tại: báo không tìm thấy sự cố.
+- [x] **AD29** `/admin/batches` liệt kê mọi lô trên chain (6 lô seed trở lên), có lọc theo trạng thái, hết hạn, thu hồi.
+- [x] **AD30** Mở chi tiết một lô: hồ sơ, nhiệt độ, hành trình, QR giống trang công khai nhưng có nút thu hồi.
 
 ### Luồng AE. Thu hồi lô (`recallBatch`)
 
 Chuẩn bị tệp lý do: `backend/scripts/sample_data/recall-reason.pdf`.
 
-- [ ] **AD31** Từ sự cố của COCONUT-001, bấm thu hồi COCONUT-002 (lô liên quan): hộp thoại yêu cầu chọn sự cố tham chiếu và nhập lý do, có chọn tệp PDF lý do.
-- [ ] **AD32** Không nhập lý do hoặc không chọn tệp: báo lỗi, không gửi.
-- [ ] **AD33** Chọn đúng PDF: hiện tên, dung lượng, SHA-256; tải lên IPFS có CID thật; hash khớp.
-- [ ] **AD34** **Từ chối** ký ở MetaMask: báo từ chối, lô **không** bị thu hồi.
-- [ ] **AD35** Xác nhận: khung tiến trình chạy hết, hiện txHash; COCONUT-002 hiện nhãn "Đã thu hồi".
-- [ ] **AD36** Chỉ COCONUT-002 bị thu hồi: COCONUT-001, 003, 004 không đổi (không thu hồi cả trang trại).
-- [ ] **AD37** Trang công khai của COCONUT-002: cảnh báo thu hồi nổi bật kèm lý do và tệp lý do; lô đã Sold vẫn hiện cảnh báo (kiểm thêm với COCONUT-001 nếu bị thu hồi).
-- [ ] **AD38** Đăng nhập Retailer: COCONUT-002 không bán được nữa (nút bị khóa), vẫn báo sự cố được.
-- [ ] **AD39** Thu hồi lại lô đã thu hồi (COCONUT-002 hoặc 005): bị chặn, báo "đã thu hồi".
-- [ ] **AD40** Thu hồi với mã sự cố không tồn tại: bị chặn, báo "không có sự cố".
-- [ ] **AD41** Thu hồi một lô bằng sự cố của lô khác (sự cố của 001, lô 002): được phép vì sự cố tham chiếu có thể thuộc lô khác; sự cố phải tồn tại.
-- [ ] **AD42** Lô đã thu hồi hết hạn (COCONUT-006 nếu thu hồi): vẫn thu hồi được (thu hồi không bị chặn bởi hết hạn).
+- [x] **AD31** Từ sự cố của COCONUT-001, bấm thu hồi COCONUT-002 (lô liên quan): hộp thoại yêu cầu chọn sự cố tham chiếu và nhập lý do, có chọn tệp PDF lý do.
+- [x] **AD32** Không nhập lý do hoặc không chọn tệp: báo lỗi, không gửi.
+- [x] **AD33** Chọn đúng PDF: hiện tên, dung lượng, SHA-256; tải lên IPFS có CID thật; hash khớp.
+- [x] **AD34** **Từ chối** ký ở MetaMask: báo từ chối, lô **không** bị thu hồi.
+- [x] **AD35** Xác nhận: khung tiến trình chạy hết, hiện txHash; COCONUT-002 hiện nhãn "Đã thu hồi".
+- [x] **AD36** Chỉ COCONUT-002 bị thu hồi: COCONUT-001, 003, 004 không đổi (không thu hồi cả trang trại).
+- [x] **AD37** Trang công khai của COCONUT-002: cảnh báo thu hồi nổi bật kèm lý do và tệp lý do; lô đã Sold vẫn hiện cảnh báo (kiểm thêm với COCONUT-001 nếu bị thu hồi).
+- [x] **AD38** Đăng nhập Retailer: COCONUT-002 không bán được nữa (nút bị khóa), vẫn báo sự cố được.
+- [x] **AD39** Thu hồi lại lô đã thu hồi (COCONUT-002 hoặc 005): bị chặn, báo "đã thu hồi".
+- [x] **AD40** Thu hồi với mã sự cố không tồn tại: bị chặn, báo "không có sự cố".
+- [x] **AD41** Thu hồi một lô bằng sự cố của lô khác (sự cố của 001, lô 002): được phép vì sự cố tham chiếu có thể thuộc lô khác; sự cố phải tồn tại.
+- [x] **AD42** Lô đã thu hồi hết hạn (COCONUT-006 nếu thu hồi): vẫn thu hồi được (thu hồi không bị chặn bởi hết hạn).
 
 ### Luồng AF. Quyền
 
-- [ ] **AD43** Đăng nhập **Farmer A**, gõ tay `/admin/roles`: bị chặn.
-- [ ] **AD44** Đăng nhập **Retailer**, gõ tay `/admin/incidents`: bị chặn; đăng nhập **ví #5 chưa quyền** vào `/admin/...`: "Chưa được cấp quyền".
-- [ ] **AD45** F5 ở một trang Admin: vẫn đăng nhập, vẫn ở đúng trang.
+- [x] **AD43** Đăng nhập **Farmer A**, gõ tay `/admin/roles`: bị chặn.
+- [x] **AD44** Đăng nhập **Retailer**, gõ tay `/admin/incidents`: bị chặn; đăng nhập **ví #5 chưa quyền** vào `/admin/...`: "Chưa được cấp quyền".
+- [x] **AD45** F5 ở một trang Admin: vẫn đăng nhập, vẫn ở đúng trang.
 
 ---
 
