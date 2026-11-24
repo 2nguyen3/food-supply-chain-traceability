@@ -418,6 +418,8 @@ contract FoodTraceability is ERC721URIStorage, AccessControl, ReentrancyGuard {
             revert InvalidLifecycle(tokenId, _batches[tokenId].lifecycle);
         }
 
+        _checkRole(LOGISTICS_ROLE, msg.sender);
+
         if (_readingUsed[tokenId][readingId]) {
             revert ReadingUsed(tokenId, readingId);
         }
@@ -446,6 +448,8 @@ contract FoodTraceability is ERC721URIStorage, AccessControl, ReentrancyGuard {
             revert InvalidLifecycle(tokenId, _batches[tokenId].lifecycle);
         }
 
+        _checkRole(RETAILER_ROLE, msg.sender);
+
         _batches[tokenId].lifecycle = Lifecycle.Sold;
 
         emit BatchSold(tokenId, msg.sender, uint64(block.timestamp));
@@ -467,6 +471,8 @@ contract FoodTraceability is ERC721URIStorage, AccessControl, ReentrancyGuard {
         if (lifecycle != Lifecycle.Delivered && lifecycle != Lifecycle.Sold) {
             revert InvalidLifecycle(tokenId, lifecycle);
         }
+
+        _checkRole(RETAILER_ROLE, msg.sender);
 
         if (bytes(reportCID).length == 0 || reportHash == bytes32(0)) {
             revert EmptyReport();

@@ -1,5 +1,6 @@
 import { api } from './api'
 import { HttpError } from './http'
+import { sha256Hex } from '../lib/hash'
 
 export type DocType = 'certificate' | 'image' | 'metadata' | 'invoice' | 'incident_report' | 'recall_reason'
 
@@ -67,8 +68,8 @@ export function bindDocument(id: string, tokenId: string, txHash?: string): Prom
 }
 
 /** Tài liệu riêng đã gắn vào lô mà ví đang đăng nhập được phép đọc. */
-export function listPrivateDocuments(tokenId: string): Promise<DocumentListItem[]> {
-  return api.request<DocumentListItem[]>(`/documents?token_id=${encodeURIComponent(tokenId)}`)
+export function listPrivateDocuments(tokenId: string, signal?: AbortSignal): Promise<DocumentListItem[]> {
+  return api.request<DocumentListItem[]>(`/documents?token_id=${encodeURIComponent(tokenId)}`, { signal, cache: 'no-store' })
 }
 
 export function grantDocumentAccess(id: string, wallet: string): Promise<GrantOut> {
@@ -80,11 +81,21 @@ export function revokeDocumentAccess(id: string, wallet: string): Promise<void> 
 }
 
 /** Tải bản đã giải mã của tài liệu riêng; backend kiểm lại vai trò on-chain và quyền đọc mỗi lần. */
-export async function downloadPrivateDocument(id: string): Promise<DownloadedDocument> {
-  const response = await api.requestRaw(`/documents/${id}/content`)
+export async function downloadPrivateDocument(id: string, signal?: AbortSignal): Promise<DownloadedDocument> {
+  const response = await api.requestRaw(`/documents/${id}/content`, { signal, cache: 'no-store' })
   const disposition = response.headers.get('Content-Disposition') ?? ''
   const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'tai-lieu'
   return { blob: await response.blob(), filename, sha256: response.headers.get('X-Document-Sha256') ?? '' }
+}
+
+/** Chỉ trả tệp cho thao tác lưu khi byte giải mã khớp cả danh sách và header backend. */
+export async function downloadVerifiedPrivateDocument(id: string, expectedHash: string, signal?: AbortSignal): Promise<DownloadedDocument> {
+  const file = await downloadPrivateDocument(id, signal)
+  const actual = await sha256Hex(file.blob)
+  signal?.throwIfAborted()
+  if (!/^[0-9a-f]{64}$/i.test(expectedHash) || actual !== expectedHash.toLowerCase() || actual !== file.sha256.toLowerCase())
+    throw new HttpError('PRIVATE_HASH_MISMATCH', 'SHA-256 của hóa đơn không khớp. Tệp chưa được tải xuống.')
+  return file
 }
 
 export function describeApiError(error: unknown): string {
@@ -97,7 +108,7 @@ export function describeApiError(error: unknown): string {
     case 'FILE_TOO_LARGE':
       return 'Tệp vượt quá 10 MB.'
     case 'UNSUPPORTED_CONTENT':
-      return 'Nội dung tệp không đúng loại hồ sơ (PDF, JPEG/PNG hoặc JSON).'
+      return 'Nội dung tệp không đúng loại hồ sơ (PDF, JPEG/PNG/WebP hoặc JSON).'
     case 'IPFS_UPLOAD_FAILED':
       return 'Tải lên IPFS thất bại. Chưa có gì được lưu, hãy thử lại.'
     case 'CHAIN_UNAVAILABLE':
@@ -106,6 +117,12 @@ export function describeApiError(error: unknown): string {
       return 'Máy chủ chưa xác nhận được biên nhận giao dịch. Hãy thử lại sau ít giây.'
     case 'HASH_MISMATCH':
       return 'Hash hồ sơ không khớp với dữ liệu trên blockchain.'
+    case 'PRIVATE_HASH_MISMATCH':
+      return 'SHA-256 của hóa đơn không khớp bản ghi backend. Tệp chưa được tải xuống.'
+    case 'IPFS_FETCH_FAILED':
+      return 'Không tải được tệp mã hóa từ IPFS. Hãy thử lại sau.'
+    case 'CIPHERTEXT_INVALID':
+      return 'Không thể xác minh hoặc giải mã hóa đơn. Tệp chưa được tải xuống.'
     case 'ALREADY_BOUND':
       return 'Hồ sơ này đã được gắn vào một lô khác.'
     case 'NOT_UPLOADER':

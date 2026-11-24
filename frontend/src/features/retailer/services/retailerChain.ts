@@ -63,13 +63,14 @@ export async function readRetailerSnapshot(address: string, signal?: AbortSignal
     const allIds = created.map((log) => argsOf(log).tokenId as bigint)
     const codeOf = new Map(created.map((log) => [String(argsOf(log).tokenId), String(argsOf(log).batchCode)]))
     const allBatches = await Promise.all(allIds.map(async (id) => {
-      const [batch, owner, pending] = await Promise.all([
+      const [batch, owner, pending, chainExpired] = await Promise.all([
         contract.getBatch(id), contract.ownerOf(id) as Promise<string>, contract.getPendingTransfer(id),
+        contract.isExpired(id),
       ])
       return {
         code: String(batch.batchCode), tokenId: id.toString(), farmId: String(batch.farmId),
         harvestGroupId: String(batch.harvestGroupId), lifecycle: lifecycles[Number(batch.lifecycle)] ?? 'Created',
-        recalled: Boolean(batch.recalled), expired: Date.now() >= Number(batch.expiryDate) * 1000,
+        recalled: Boolean(batch.recalled), expired: Boolean(chainExpired) || Date.now() >= Number(batch.expiryDate) * 1000,
         expiryDate: new Date(Number(batch.expiryDate) * 1000).toISOString(), owner: getAddress(owner),
         pendingRequestId: pending.active ? String(pending.requestId) : undefined,
       } satisfies RetailerBatch

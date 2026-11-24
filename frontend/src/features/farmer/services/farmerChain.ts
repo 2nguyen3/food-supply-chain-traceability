@@ -87,10 +87,11 @@ export async function readFarmerSnapshot(
       created.map(async (log) => {
         const a = argsOf(log)
         const tokenId = a.tokenId as bigint
-        const [info, owner, pending] = await Promise.all([
+        const [info, owner, pending, chainExpired] = await Promise.all([
           contract.getBatch(tokenId),
           contract.ownerOf(tokenId) as Promise<string>,
           contract.getPendingTransfer(tokenId),
+          contract.isExpired(tokenId),
         ])
         const ownerAddress = getAddress(owner) as `0x${string}`
         return {
@@ -100,7 +101,7 @@ export async function readFarmerSnapshot(
           harvestGroupId: info.harvestGroupId as string,
           lifecycle: LIFECYCLES[Number(info.lifecycle)] ?? 'Created',
           recalled: Boolean(info.recalled),
-          expired: Date.now() >= Number(info.expiryDate) * 1000,
+          expired: Boolean(chainExpired) || Date.now() >= Number(info.expiryDate) * 1000,
           expiryDate: new Date(Number(info.expiryDate) * 1000).toISOString(),
           owner: ownerAddress,
           ownedByMe: ownerAddress.toLowerCase() === address.toLowerCase(),

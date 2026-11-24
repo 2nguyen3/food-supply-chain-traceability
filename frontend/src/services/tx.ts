@@ -60,6 +60,29 @@ function describeRevert(name: string, args: readonly unknown[]): string {
 /** Chuẩn hóa mọi lỗi từ ví, RPC và hợp đồng về một dạng có thông điệp tiếng Việt. */
 export function toTxError(error: unknown): TxError {
   if (error instanceof TxError) return error
+  const pending: unknown[] = [error]
+  const seen = new Set<unknown>()
+  const details: { code?: number | string; message?: string }[] = []
+  while (pending.length && seen.size < 16) {
+    const value = pending.shift()
+    if (!value || typeof value !== 'object' || seen.has(value)) continue
+    seen.add(value)
+    const item = value as {
+      code?: number | string; message?: string; error?: unknown; cause?: unknown
+      info?: { error?: unknown }; data?: { originalError?: unknown }
+    }
+    details.push(item)
+    pending.push(item.error, item.cause, item.info?.error, item.data?.originalError)
+  }
+  if (details.some((item) => item.code === 4001 || item.code === 'ACTION_REJECTED'))
+    return new TxError('rejected', 'Bạn đã từ chối ký giao dịch trong MetaMask.')
+  if (details.some((item) =>
+    item.code === 'NONCE_EXPIRED' || item.code === 'REPLACEMENT_UNDERPRICED' ||
+    (typeof item.message === 'string' && /nonce too (high|low)|nonce has already been used|replacement transaction underpriced/i.test(item.message)),
+  ))
+    return new TxError('wallet', config.chainId === 31337
+      ? 'Số thứ tự giao dịch (nonce) của ví không khớp mạng local. Kiểm tra Activity trong MetaMask; nếu vừa dựng lại Hardhat, xóa activity và nonce data của tài khoản trên mạng local rồi thử lại.'
+      : 'Số thứ tự giao dịch (nonce) của ví không khớp. Kiểm tra các giao dịch đang chờ trong MetaMask trước khi thử lại.')
   const code = (error as { code?: number | string })?.code
   if (code === 'ACTION_REJECTED' || code === 4001 || isError(error, 'ACTION_REJECTED'))
     return new TxError('rejected', 'Bạn đã từ chối ký giao dịch trong MetaMask.')
@@ -71,11 +94,6 @@ export function toTxError(error: unknown): TxError {
     return new TxError('network', 'Không kết nối được blockchain. Hãy kiểm tra mạng rồi thử lại.')
   if (isError(error, 'INSUFFICIENT_FUNDS'))
     return new TxError('wallet', 'Ví không đủ ETH để trả phí giao dịch.')
-  if (isError(error, 'NONCE_EXPIRED') || isError(error, 'REPLACEMENT_UNDERPRICED'))
-    return new TxError(
-      'wallet',
-      'MetaMask báo sai số thứ tự giao dịch (nonce). Nếu vừa dựng lại mạng local, hãy xóa dữ liệu tab hoạt động của tài khoản trong MetaMask.',
-    )
   const wallet = toWalletError(error)
   return new TxError(wallet.code === 'REJECTED' ? 'rejected' : 'wallet', wallet.message)
 }

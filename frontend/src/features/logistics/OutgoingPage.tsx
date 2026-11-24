@@ -31,7 +31,7 @@ export default function LogisticsOutgoingPage() {
       try {
         const [snap, retailerMembers] = await Promise.all([
           readLogisticsSnapshot(session.wallet.address, signal),
-          listRoleMembers('retailer', signal),
+          listRoleMembers('retailer'),
         ])
         if (signal?.aborted) return
         setOwnedBatches(snap.ownedBatches)

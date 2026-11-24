@@ -29,11 +29,13 @@ def _out(doc: Document) -> DocumentOut:
 
 @router.get("", response_model=list[DocumentListItem])
 def list_documents(
+    response: Response,
     token_id: str | None = None,
     wallet: str = Depends(current_wallet),
     db: Session = Depends(get_session),
     chain: ChainClient = Depends(get_chain),
 ):
+    response.headers["Cache-Control"] = "no-store"
     items = document_service.list_private_documents(db, chain, wallet, token_id)
     return [
         DocumentListItem(

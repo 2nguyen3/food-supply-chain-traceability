@@ -1,0 +1,2 @@
+# Dùng cùng phiên bản Web3 và dependency với backend để tránh hai môi trường lệch nhau.
+-r ../backend/requirements.lock

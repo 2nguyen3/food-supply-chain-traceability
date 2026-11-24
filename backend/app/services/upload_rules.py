@@ -15,7 +15,7 @@ MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB
 
 PDF_MAGIC = b"%PDF-"
 JPEG_MAGIC = b"\xff\xd8\xff"
-PNG_MAGIC = b"\x89PNG"
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 # doc_type -> vai trò on-chain bắt buộc của người upload
 ROLE_FOR_DOC_TYPE = {
@@ -76,7 +76,10 @@ def validate_content(doc_type: str, content: bytes) -> str:
             return "image/jpeg"
         if content.startswith(PNG_MAGIC):
             return "image/png"
-        raise UnsupportedContent("Cần ảnh JPEG hoặc PNG")
+        if (len(content) >= 16 and content[:4] == b"RIFF" and content[8:12] == b"WEBP"
+                and content[12:16] in (b"VP8 ", b"VP8L", b"VP8X")):
+            return "image/webp"
+        raise UnsupportedContent("Cần ảnh JPEG, PNG hoặc WebP")
     if doc_type == "metadata":
         try:
             check_metadata(content)

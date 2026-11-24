@@ -243,6 +243,7 @@ def test_list_private_documents_by_role(api, invoice):
 
     mine = _list(api, "farmerA", 1)
     assert mine.status_code == 200 and len(mine.json()) == 1
+    assert mine.headers["cache-control"] == "no-store"
     item = mine.json()[0]
     assert item["id"] == doc["id"] and item["can_manage"] is True and item["doc_type"] == "invoice"
     assert {g["wallet"] for g in item["grants"]} == {

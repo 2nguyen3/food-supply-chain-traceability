@@ -1,35 +1,45 @@
-import { useCallback, useEffect, useState } from 'react'
-import { sha256Hex } from '../../lib/hash'
-import { describeApiError, downloadPrivateDocument, listPrivateDocuments, type DocumentListItem } from '../../services/documentsApi'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSession } from '../../app/session'
+import { describeApiError, downloadVerifiedPrivateDocument, listPrivateDocuments, type DocumentListItem } from '../../services/documentsApi'
 import { RetailerEmpty } from './components'
 
 export function RetailerPrivateDocuments({ tokenId }: { tokenId: string }) {
+  const { session } = useSession()
+  return <RetailerPrivateContent key={`${session?.wallet.address}:${session?.expiresAt}:${tokenId}`} tokenId={tokenId} />
+}
+
+function RetailerPrivateContent({ tokenId }: { tokenId: string }) {
+  const lifetime = useRef<AbortController | null>(null)
+  const loading = useRef<AbortController | null>(null)
+  useEffect(() => {
+    const controller = new AbortController()
+    lifetime.current = controller
+    return () => controller.abort()
+  }, [])
   const [documents, setDocuments] = useState<DocumentListItem[] | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState('')
   const [notice, setNotice] = useState('')
 
   const load = useCallback(() => {
+    loading.current?.abort()
+    const controller = new AbortController()
+    loading.current = controller
     setDocuments(null)
     setError('')
-    listPrivateDocuments(tokenId).then(
-      (items) => setDocuments(items.filter((item) => item.doc_type === 'invoice')),
-      (cause) => setError(describeApiError(cause)),
+    listPrivateDocuments(tokenId, controller.signal).then(
+      (items) => { if (!controller.signal.aborted) setDocuments(items.filter((item) => item.doc_type === 'invoice')) },
+      (cause) => { if (!controller.signal.aborted) setError(describeApiError(cause)) },
     )
   }, [tokenId])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load(); return () => loading.current?.abort() }, [load])
 
   async function download(document: DocumentListItem) {
     setBusy(document.id)
     setNotice('')
     try {
-      const file = await downloadPrivateDocument(document.id)
-      const actualHash = await sha256Hex(file.blob)
-      if (actualHash.toLowerCase() !== document.sha256.toLowerCase()) {
-        setNotice('SHA-256 của hóa đơn không khớp với bản ghi backend. Tệp chưa được tải xuống.')
-        return
-      }
+      const file = await downloadVerifiedPrivateDocument(document.id, document.sha256, lifetime.current?.signal)
       const url = URL.createObjectURL(file.blob)
       const anchor = window.document.createElement('a')
       anchor.href = url
@@ -37,7 +47,7 @@ export function RetailerPrivateDocuments({ tokenId }: { tokenId: string }) {
       anchor.click()
       window.setTimeout(() => URL.revokeObjectURL(url), 1000)
       setNotice('Đã tải hóa đơn. SHA-256 của byte giải mã khớp bản ghi backend.')
-    } catch (cause) { setNotice(describeApiError(cause)) }
+    } catch (cause) { if (!lifetime.current?.signal.aborted) setNotice(describeApiError(cause)) }
     finally { setBusy('') }
   }
 

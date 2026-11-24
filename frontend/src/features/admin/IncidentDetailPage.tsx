@@ -1132,9 +1132,19 @@ export function IncidentDetailPage() {
             <h2>Số liệu truy ngược</h2>
             <div className="incident-recall-meta">
               <div>
-                <span>Thời gian đọc</span>
+                <span>Tổng thời gian đọc (gồm IPFS)</span>
                 <strong>{detail.metrics.durationMs} ms</strong>
               </div>
+              <div>
+                <span>Truy ngược trên chain</span>
+                <strong>{detail.metrics.chainDurationMs ?? detail.metrics.durationMs} ms</strong>
+              </div>
+              {detail.metrics.artifactDurationMs !== undefined && (
+                <div>
+                  <span>Tải bằng chứng IPFS</span>
+                  <strong>{detail.metrics.artifactDurationMs} ms</strong>
+                </div>
+              )}
               <div>
                 <span>Số lần gọi RPC</span>
                 <strong>{detail.metrics.rpcCalls}</strong>

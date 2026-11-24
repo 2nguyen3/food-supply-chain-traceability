@@ -40,6 +40,7 @@ export interface DemoReading {
 }
 
 export interface DemoDocument {
+  kind?: 'certificate' | 'image' | 'metadata'
   name: 'certificate.pdf' | 'batch.jpg' | 'metadata.json' | (string & {})
   label: string
   cid?: string

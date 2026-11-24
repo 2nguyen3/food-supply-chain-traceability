@@ -163,6 +163,54 @@ describe("P03-08, C13: recordTransit", function () {
   });
 });
 
+describe("C13/C14/C16: vai trò bị thu hồi khi ví vẫn giữ NFT", function () {
+  it("chặn ghi vận chuyển sau revoke; cấp lại role ghi được cùng readingId", async function () {
+    const fx = await networkHelpers.loadFixture(inTransitFixture);
+    const t = BigInt(await networkHelpers.time.latest());
+    await fx.contract.connect(fx.admin).revokeRole(fx.LOGISTICS_ROLE, fx.logistics.address);
+    await expect(fx.contract.connect(fx.logistics).recordTransit(1n, 1n, 1000, t, LOC))
+      .to.be.revertedWithCustomError(fx.contract, "AccessControlUnauthorizedAccount")
+      .withArgs(fx.logistics.address, fx.LOGISTICS_ROLE);
+    expect(await fx.contract.ownerOf(1n)).to.equal(fx.logistics.address);
+    expect((await fx.contract.getBatch(1n)).lifecycle).to.equal(IN_TRANSIT);
+    await fx.contract.connect(fx.admin).grantRole(fx.LOGISTICS_ROLE, fx.logistics.address);
+    await expect(fx.contract.connect(fx.logistics).recordTransit(1n, 1n, 1000, t, LOC))
+      .to.emit(fx.contract, "TransitRecorded").withArgs(1n, 1n, 1000n, t, LOC);
+  });
+
+  it("chặn bán sau revoke; cấp lại role mới đổi Delivered thành Sold", async function () {
+    const fx = await networkHelpers.loadFixture(deliveredFixture);
+    await fx.contract.connect(fx.admin).revokeRole(fx.RETAILER_ROLE, fx.retailer.address);
+    await expect(fx.contract.connect(fx.retailer).markSold(1n))
+      .to.be.revertedWithCustomError(fx.contract, "AccessControlUnauthorizedAccount")
+      .withArgs(fx.retailer.address, fx.RETAILER_ROLE);
+    expect((await fx.contract.getBatch(1n)).lifecycle).to.equal(2n);
+    expect(await fx.contract.ownerOf(1n)).to.equal(fx.retailer.address);
+    await fx.contract.connect(fx.admin).grantRole(fx.RETAILER_ROLE, fx.retailer.address);
+    await expect(fx.contract.connect(fx.retailer).markSold(1n)).to.emit(fx.contract, "BatchSold");
+    expect((await fx.contract.getBatch(1n)).lifecycle).to.equal(SOLD);
+    expect(await fx.contract.ownerOf(1n)).to.equal(fx.retailer.address);
+  });
+
+  for (const [state, fixture] of [["Delivered", deliveredFixture], ["Sold", soldFixture]] as const) {
+    it(`chặn báo sự cố ở ${state} sau revoke; không tiêu thụ incidentId`, async function () {
+      const fx = await networkHelpers.loadFixture(fixture);
+      const before = await fx.contract.getBatch(1n);
+      await fx.contract.connect(fx.admin).revokeRole(fx.RETAILER_ROLE, fx.retailer.address);
+      await expect(fx.contract.connect(fx.retailer).reportIncident(1n, REPORT_CID, REPORT_HASH))
+        .to.be.revertedWithCustomError(fx.contract, "AccessControlUnauthorizedAccount")
+        .withArgs(fx.retailer.address, fx.RETAILER_ROLE);
+      await expect(fx.contract.getIncident(2n)).to.be.revertedWithCustomError(fx.contract, "UnknownIncident");
+      expect((await fx.contract.getBatch(1n)).lifecycle).to.equal(before.lifecycle);
+      expect(await fx.contract.ownerOf(1n)).to.equal(fx.retailer.address);
+      await fx.contract.connect(fx.admin).grantRole(fx.RETAILER_ROLE, fx.retailer.address);
+      await expect(fx.contract.connect(fx.retailer).reportIncident(1n, REPORT_CID, REPORT_HASH))
+        .to.emit(fx.contract, "IncidentReported")
+        .withArgs(2n, 1n, fx.retailer.address, REPORT_CID, REPORT_HASH);
+    });
+  }
+});
+
 describe("X04: recordTransit thời điểm quan sát", function () {
   it("observedAt ở tương lai thì InvalidObservedAt", async function () {
     const { contract, logistics } = await networkHelpers.loadFixture(inTransitFixture);

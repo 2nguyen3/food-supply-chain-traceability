@@ -8,11 +8,12 @@
  * - Không mã hóa cứng mã lô, số liệu hay địa chỉ ví: mọi giá trị đều suy ra từ chain.
  * - Mọi số liệu đo được (thời gian, số lần gọi RPC, số event) trả về trong `metrics` để báo cáo.
  */
-import { Contract, getAddress, isAddress, JsonRpcProvider, type EventLog, type Log } from 'ethers'
+import { Contract, getAddress, isAddress, JsonRpcProvider, type EventLog, type Log, type JsonRpcPayload } from 'ethers'
 import { config } from '../../../config/env'
 import abiFile from '../../../contracts/FoodTraceability.json'
 import type { Lifecycle, Role } from '../../../domain/types'
 import { sha256Hex } from '../../../lib/hash'
+import { readResponseBytes } from '../../../lib/readResponseBytes'
 import { argsOf, makeLogQuery } from '../../../services/chainLogs'
 import { roleHash } from '../../../services/roles'
 import { ipfsFileUrl } from '../../public/services/publicChainReader'
@@ -41,10 +42,22 @@ export class AdminChainError extends Error {
 export interface AdminReadMetrics {
   /** Thời gian đọc thực tế (ms), gồm cả tải tệp IPFS nếu có. */
   durationMs: number
-  /** Số lần gọi RPC hợp lý đã phát ra (không tính lần thử lại khi RPC giới hạn khoảng block). */
+  /** Số JSON-RPC request thực gửi, gồm cả chainId và các lần chia khoảng/retry. */
   rpcCalls: number
   /** Số event đã giải mã. */
   events: number
+  /** Riêng chi tiết sự cố: thời gian truy ngược trên chain, trước khi tải bằng chứng IPFS. */
+  chainDurationMs?: number
+  artifactDurationMs?: number
+}
+
+class MeasuredProvider extends JsonRpcProvider {
+  rpcCalls = 0
+
+  override async _send(payload: JsonRpcPayload | JsonRpcPayload[]) {
+    this.rpcCalls += Array.isArray(payload) ? payload.length : 1
+    return super._send(payload)
+  }
 }
 
 export interface AdminRecallInfo {
@@ -216,13 +229,13 @@ export interface AdminIncidentDetail {
 }
 
 interface ChainContext {
-  provider: JsonRpcProvider
+  provider: MeasuredProvider
   contract: Contract
   latest: number
   call: <T>(work: Promise<T>) => Promise<T>
   query: (name: string, ...args: unknown[]) => Promise<(EventLog | Log)[]>
   timeOf: (blockNumber: number) => Promise<string>
-  stats: { rpcCalls: number; events: number }
+  stats: { events: number }
 }
 
 const shortAddress = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`
@@ -270,12 +283,11 @@ async function withChain<T>(
     )
 
   assertLive(signal)
-  const provider = new JsonRpcProvider(config.publicRpcUrl, undefined, { batchMaxCount: 1 })
-  const stats = { rpcCalls: 0, events: 0 }
+  const provider = new MeasuredProvider(config.publicRpcUrl, undefined, { batchMaxCount: 1 })
+  const stats = { events: 0 }
   const blockTimes = new Map<number, string>()
   try {
     const network = await provider.getNetwork()
-    stats.rpcCalls += 1
     if (network.chainId !== BigInt(config.chainId))
       throw new AdminChainError(
         'network',
@@ -283,7 +295,6 @@ async function withChain<T>(
       )
 
     const latest = await provider.getBlockNumber()
-    stats.rpcCalls += 1
     const contract = new Contract(config.contractAddress!, abiFile.abi, provider)
     const rawQuery = makeLogQuery(contract, config.deployBlock, latest, signal)
 
@@ -293,11 +304,9 @@ async function withChain<T>(
       latest,
       stats,
       call: <R>(work: Promise<R>) => {
-        stats.rpcCalls += 1
         return work
       },
       query: async (name, ...args) => {
-        stats.rpcCalls += 1
         const found = await rawQuery(name, ...args)
         stats.events += found.length
         return found
@@ -305,7 +314,6 @@ async function withChain<T>(
       timeOf: async (blockNumber) => {
         const cached = blockTimes.get(blockNumber)
         if (cached) return cached
-        stats.rpcCalls += 1
         const block = await provider.getBlock(blockNumber)
         const iso = new Date((block?.timestamp ?? 0) * 1000).toISOString()
         blockTimes.set(blockNumber, iso)
@@ -329,7 +337,7 @@ async function withChain<T>(
 function metricsOf(ctx: ChainContext, started: number): AdminReadMetrics {
   return {
     durationMs: Math.round(performance.now() - started),
-    rpcCalls: ctx.stats.rpcCalls,
+    rpcCalls: ctx.provider.rpcCalls,
     events: ctx.stats.events,
   }
 }
@@ -858,8 +866,8 @@ async function readArtifact(
       signal: AbortSignal.any([signal, AbortSignal.timeout(ARTIFACT_TIMEOUT_MS)]),
     })
     if (!response.ok) return empty
-    const bytes = new Uint8Array(await response.arrayBuffer())
-    if (bytes.length === 0 || bytes.length > MAX_ARTIFACT_BYTES) return empty
+    const bytes = await readResponseBytes(response, MAX_ARTIFACT_BYTES)
+    if (bytes.length === 0) return empty
     const computedSha256 = await sha256Hex(bytes)
     const isPdf =
       bytes.length >= 4 &&
@@ -885,14 +893,15 @@ async function readArtifact(
       json,
       text,
     }
-  } catch {
+  } catch (error) {
+    if (signal.aborted) throw error
     return empty
   }
 }
 
 /** Mô tả sự cố chỉ đọc từ trường văn bản của báo cáo JSON; PDF không tự sinh mô tả. */
 export function incidentDescription(artifact: AdminArtifact): string | null {
-  if (!artifact.json || typeof artifact.json !== 'object') return null
+  if (artifact.verified !== 'match' || !artifact.json || typeof artifact.json !== 'object') return null
   const record = artifact.json as Record<string, unknown>
   for (const key of DESCRIPTION_KEYS) {
     const value = record[key]
@@ -913,7 +922,7 @@ function recallManifest(
   artifact: AdminArtifact | null,
   recall: AdminRecallInfo | null,
 ): Record<string, unknown> | null {
-  if (!artifact?.json || !recall || typeof artifact.json !== 'object') return null
+  if (artifact?.verified !== 'match' || !artifact.json || !recall || typeof artifact.json !== 'object') return null
   const record = artifact.json as Record<string, unknown>
   if (record.kind !== 'cocomark.recall-reason' || Number(record.version) !== 1) return null
   if (String(record.tokenId) !== recall.tokenId) return null
@@ -1071,14 +1080,13 @@ export async function readAdminIncidentDetail(
       (entry) => entry.tokenId !== batch.tokenId && entry.farmId !== batch.farmId,
     )
 
-    const report = await readArtifact(
-      cidOf(incident.reportCID),
-      chainHashHex(incident.reportHash),
-      signal,
-    )
-    const recallArtifact = batch.recall
-      ? await readArtifact(batch.recall.reasonCid, batch.recall.reasonHash, signal)
-      : null
+    const chainDurationMs = Math.round(performance.now() - started)
+    const artifactStarted = performance.now()
+    const [report, recallArtifact] = await Promise.all([
+      readArtifact(cidOf(incident.reportCID), chainHashHex(incident.reportHash), signal),
+      batch.recall ? readArtifact(batch.recall.reasonCid, batch.recall.reasonHash, signal) : null,
+    ])
+    const artifactDurationMs = Math.round(performance.now() - artifactStarted)
 
     return {
       incident: incidentRow ?? {
@@ -1111,7 +1119,7 @@ export async function readAdminIncidentDetail(
       roleLabels,
       recallArtifact,
       recallReasonText: recallReasonText(recallArtifact, batch.recall),
-      metrics: metricsOf(ctx, started),
+      metrics: { ...metricsOf(ctx, started), chainDurationMs, artifactDurationMs },
     }
   })
 }

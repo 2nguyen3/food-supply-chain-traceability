@@ -45,7 +45,7 @@ def test_each_encryption_uses_fresh_iv_and_key(sealed):
 
 
 @pytest.mark.parametrize("label", [
-    "ciphertext", "tag", "iv", "truncated", "magic", "aad_uploader", "aad_document", "wrapped_key", "wrap_tag", "master_key",
+    "ciphertext", "tag", "iv", "truncated", "magic", "version", "aad_uploader", "aad_document", "wrapped_key", "wrap_tag", "master_key",
 ])
 def test_tampering_is_rejected(sealed, label):
     mk, doc, up, _, e = sealed
@@ -55,6 +55,7 @@ def test_tampering_is_rejected(sealed, label):
         "iv": dict(package=_flip(e.package, 5)),
         "truncated": dict(package=e.package[:20]),
         "magic": dict(package=b"XXX" + e.package[3:]),
+        "version": dict(package=_flip(e.package, 3)),
         "aad_uploader": dict(aad=crypto.build_aad(1, doc, "0x" + "cd" * 20)),
         "aad_document": dict(aad=crypto.build_aad(1, uuid.uuid4(), up)),
         "wrapped_key": dict(wrapped_key=_flip(e.wrapped_key, 0)),

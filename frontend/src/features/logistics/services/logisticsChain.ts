@@ -193,10 +193,11 @@ export async function readLogisticsSnapshot(
         const a = argsOf(log)
         const tokenId = a.tokenId as bigint
         const tokenIdStr = tokenId.toString()
-        const [info, owner, pending] = await Promise.all([
+        const [info, owner, pending, chainExpired] = await Promise.all([
           contract.getBatch(tokenId),
           contract.ownerOf(tokenId) as Promise<string>,
           contract.getPendingTransfer(tokenId),
+          contract.isExpired(tokenId),
         ])
         codeOf.set(tokenIdStr, info.batchCode as string)
 
@@ -233,7 +234,7 @@ export async function readLogisticsSnapshot(
           quantityKg: Number(info.quantityKg),
           harvestDate: new Date(Number(info.harvestDate) * 1000).toISOString(),
           expiryDate: new Date(Number(info.expiryDate) * 1000).toISOString(),
-          expired: Date.now() >= Number(info.expiryDate) * 1000,
+          expired: Boolean(chainExpired) || Date.now() >= Number(info.expiryDate) * 1000,
           lifecycle: LIFECYCLES[Number(info.lifecycle)] ?? 'Created',
           recalled: Boolean(info.recalled),
           owner: ownerAddress,
@@ -428,7 +429,7 @@ export async function verifyBatchIpfsFiles(batch: LogisticsBatch): Promise<{
   }
 
   await checkSingle('certificate', 'certificate.pdf', certCid, batch.certificateHash)
-  await checkSingle('image', 'batch.jpg', imageCid, batch.imageHash)
+  await checkSingle('image', 'Ảnh gốc của lô', imageCid, batch.imageHash)
 
   return {
     allMatched: results.length === 3 && results.every((r) => r.matched),

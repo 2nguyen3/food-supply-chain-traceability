@@ -1,0 +1,56 @@
+{
+  "chainId": 11155111,
+  "address": "0x650525fC71559CafcF37DcF8fA2844a5577f2FD3",
+  "deployBlock": 12215175,
+  "txHash": "0x0f2921bcf1577fb95a1ce945284bb2480972861a518735d7f58711538cb5e999",
+  "blockHash": "0xb00a16b091e40a78045fcd2eeb724a5142a7c7728370e6ac6862a8494e5c13d9",
+  "deployer": "0xc24a20b71ece7b2037db47782C8Afd2869c8D74d",
+  "abiHash": "0xa797894b4f18518dd7fbc854ed9950609818b7688653a46ceaeca848230afd0b",
+  "runtimeBytecodeHash": "0x5fbe55de0ac19ed9779d5591e9db36cbc3f601f95065540615f302da00f57257",
+  "deployedAt": "2026-11-26T07:55:00.000Z",
+  "farmerA": "0x617b1eE58bF06460c0e3E051174d8131d3aB7d3E",
+  "farmerB": "0xA778d16ff0031708Dc99F1eB4805024B1C4654f8",
+  "logisticsAddress": "0x5E312C9c11CDeBDd7757c2FBdDa6b7faCAF533dB",
+  "retailer": "0xF8B02B8880f49756483bA80Ac6F27f8153aa8323",
+  "commit": "c63f34917c16cfed08469f83791557542fa3f9f5",
+  "dirty": true,
+  "roleTransactions": [
+    {
+      "method": "assignFarmer",
+      "args": [
+        "0x617b1eE58bF06460c0e3E051174d8131d3aB7d3E",
+        "FARM-A"
+      ],
+      "txHash": "0xd760407370eb6a5eccea35e1bfca6bf8d325d696d314c766de6d3c24011f30b6",
+      "status": "confirmed"
+    },
+    {
+      "method": "assignFarmer",
+      "args": [
+        "0xA778d16ff0031708Dc99F1eB4805024B1C4654f8",
+        "FARM-B"
+      ],
+      "txHash": "0x74d24f33a9ac82b8eacf2810afe021d69232c9ce4cf6b4ebe9173aef3ef0d72d",
+      "status": "confirmed"
+    },
+    {
+      "method": "grantRole",
+      "args": [
+        "0xded9b5e0e0e3a2b3f09a0bc36ec64b9bf7a7c2319f3c4d9cff5ce48714257b21",
+        "0x5E312C9c11CDeBDd7757c2FBdDa6b7faCAF533dB"
+      ],
+      "txHash": "0xdf8623fe13b264d98f6e56acd0fa2b4d90ec90be7a50a95c88cb1f2b0ae03388",
+      "status": "confirmed"
+    },
+    {
+      "method": "grantRole",
+      "args": [
+        "0x2a5f906c256a5d799494fcd066e1f6c077689de1cdb65052a1624de4bace99bf",
+        "0xF8B02B8880f49756483bA80Ac6F27f8153aa8323"
+      ],
+      "txHash": "0x672fae4bd36670ec84aafbd33209594b8803c9509f44b9afb4a795a200f4c366",
+      "status": "confirmed"
+    }
+  ],
+  "contractSourceSha256": "3061ad685e79206aa302942d78c601db2af98ffb3df81732c241ecae0805481a"
+}

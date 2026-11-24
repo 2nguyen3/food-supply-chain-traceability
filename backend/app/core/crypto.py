@@ -85,6 +85,8 @@ def decrypt_document(package: bytes, aad: bytes, wrapped_key: bytes, wrap_iv: by
     """Giải mã; mọi lỗi (gói hỏng, tag sai, khóa sai, AAD sai) đều thành CiphertextInvalid."""
     if len(package) < HEADER_BYTES or not package.startswith(PACKAGE_MAGIC):
         raise CiphertextInvalid("Gói mã hóa không hợp lệ")
+    if aad.split(b"|", 1)[0] != str(package[len(PACKAGE_MAGIC)]).encode("ascii"):
+        raise CiphertextInvalid("Phiên bản gói mã hóa không khớp AAD")
     offset = len(PACKAGE_MAGIC) + 1
     iv = package[offset:offset + IV_BYTES]
     tag = package[offset + IV_BYTES:offset + IV_BYTES + TAG_BYTES]

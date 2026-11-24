@@ -222,7 +222,7 @@ export function TraceDocumentsPanel({ batch }: { batch: DemoBatch }) {
                   name={
                     document.name.endsWith('.pdf')
                       ? 'file'
-                      : document.name.endsWith('.jpg')
+                      : document.kind === 'image' || /\.(jpe?g|png|webp)$/i.test(document.name)
                         ? 'image'
                         : 'json'
                   }

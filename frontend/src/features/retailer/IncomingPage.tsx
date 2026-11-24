@@ -36,9 +36,10 @@ export default function RetailerIncomingPage() {
     try {
       const result = await inspectPublicChain({ chainId: String(config.chainId), contractAddress: config.contractAddress, tokenId: request.tokenId }, new AbortController().signal)
       if (result.kind !== 'ok') throw new Error('Không tải đủ dữ liệu lô để xác minh. Chưa thể chấp nhận bàn giao.')
-      const files = ['metadata.json', 'certificate.pdf', 'batch.jpg'].map((name) => result.batch.documents.find((document) => document.name === name))
+      const kinds = ['metadata', 'certificate', 'image'] as const
+      const files = kinds.map((kind) => result.batch.documents.find((document) => document.kind === kind))
       setFileChecks((value) => ({ ...value, [request.requestId]: ['metadata.json', 'certificate.pdf', 'batch.jpg'].map((name, index) => ({
-        name,
+        name: files[index]?.name ?? name,
         status: files[index]?.verified === 'match' ? 'SHA-256 khớp blockchain' : files[index]?.verified === 'mismatch' ? 'SHA-256 không khớp' : 'Không tải được tệp hoặc thiếu hash',
       })) }))
       if (files.some((file) => file?.verified !== 'match' || !file.sha256)) throw new Error('Có tệp thiếu hoặc hash SHA-256 không khớp blockchain. Chưa thể chấp nhận.')

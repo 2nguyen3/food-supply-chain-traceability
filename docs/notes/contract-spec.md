@@ -82,9 +82,9 @@ uint256 nextTokenId = 1; uint256 nextRequestId = 1; uint256 nextIncidentId = 1;
 | `acceptTransfer(tokenId, requestId, hashes[3])` | Đúng người nhận; **cả người gửi và người nhận** còn vai trò đúng (BR04, C10); requestId active; người gửi vẫn là chủ; không Sold/expired/recalled; 3 hash khớp | Đóng pending → cập nhật lifecycle → `_safeTransfer`; `TransferAccepted` + `Transfer` |
 | `rejectTransfer(tokenId, requestId)` | Đúng người nhận | Đóng pending; `TransferRejected` |
 | `cancelTransfer(tokenId, requestId)` | Đúng người gửi (cả khi lô đã recall) | Đóng pending; `TransferCancelled` |
-| `recordTransit(tokenId, readingId, tempCenti, observedAt, location)` | Logistics đang giữ; InTransit; không expired/recalled; readingId mới; observedAt ≤ now và ≥ `lastObservedAt` | `TransitRecorded` |
-| `markSold(tokenId)` | Retailer đang giữ; Delivered; chưa hết hạn/thu hồi | `lifecycle = Sold`; `BatchSold` |
-| `reportIncident(tokenId, reportCID, reportHash)` | Retailer đang giữ; Delivered hoặc Sold. **Không** bị chặn bởi expired/recalled (BR07) | thêm Incident; `IncidentReported` |
+| `recordTransit(tokenId, readingId, tempCenti, observedAt, location)` | Logistics đang giữ và còn LOGISTICS_ROLE; InTransit; không expired/recalled; readingId mới; observedAt ≤ now và ≥ `lastObservedAt` | `TransitRecorded` |
+| `markSold(tokenId)` | Retailer đang giữ và còn RETAILER_ROLE; Delivered; chưa hết hạn/thu hồi | `lifecycle = Sold`; `BatchSold` |
+| `reportIncident(tokenId, reportCID, reportHash)` | Retailer đang giữ và còn RETAILER_ROLE; Delivered hoặc Sold. **Không** bị chặn bởi expired/recalled (BR07) | thêm Incident; `IncidentReported` |
 | `recallBatch(tokenId, incidentId, reasonCID, reasonHash)` | Admin; lô tồn tại; chưa thu hồi; incidentId đã tồn tại (có thể thuộc lô khác); reason không rỗng. Được phép khi Sold hoặc expired | `recalled = true`; `BatchRecalled` |
 
 Bàn giao lần đầu (Farmer → Logistics) cũng đối chiếu **đủ 3 hash**, cùng quy trình với Retailer (KeHoach 11.2).

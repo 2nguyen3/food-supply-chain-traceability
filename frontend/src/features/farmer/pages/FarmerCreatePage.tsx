@@ -7,6 +7,7 @@ import { config } from '../../../config/env'
 import { BATCH_WEIGHT_KG } from '../../../domain/types'
 import { useStepFlow } from '../../../hooks/useStepFlow'
 import { sha256Hex, toBytes32, utf8Bytes } from '../../../lib/hash'
+import { imageFormat } from '../../../lib/imageFormat'
 import {
   bindDocument,
   describeApiError,
@@ -75,13 +76,10 @@ function matchesFileSignature(file: File, bytes: ArrayBuffer, kind: FileKind) {
       value[4] === 0x2d
     )
   }
-  if (file.type === 'image/jpeg')
-    return /\.(jpe?g)$/i.test(file.name) && value[0] === 0xff && value[1] === 0xd8 && value[2] === 0xff
-  if (file.type === 'image/png')
-    return (
-      /\.png$/i.test(file.name) &&
-      [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((byte, index) => value[index] === byte)
-    )
+  const format = imageFormat(value)
+  if (file.type === 'image/jpeg') return /\.jpe?g$/i.test(file.name) && format === 'jpeg'
+  if (file.type === 'image/png') return /\.png$/i.test(file.name) && format === 'png'
+  if (file.type === 'image/webp') return /\.webp$/i.test(file.name) && format === 'webp'
   return false
 }
 
@@ -259,13 +257,19 @@ export function FarmerCreatePage() {
     const version = ++fileSelectionVersion.current[kind]
     event.target.value = ''
     const invalidMessage =
-      kind === 'image' ? 'Chỉ chấp nhận ảnh JPG, JPEG hoặc PNG hợp lệ.' : 'Chỉ chấp nhận tệp PDF hợp lệ.'
+      kind === 'image' ? 'Chỉ chấp nhận ảnh JPG, JPEG, PNG hoặc WebP hợp lệ.' : 'Chỉ chấp nhận tệp PDF hợp lệ.'
     if (kind === 'invoice') setFileError('')
     else setPublicFileErrors((current) => ({ ...current, [kind]: '' }))
     setUploads((current) => ({ ...current, [kind]: undefined, ...(kind !== 'invoice' ? { metadata: undefined } : {}) }))
     setMetadataJson('')
     setFiles((current) => ({ ...current, [kind]: null }))
     try {
+      if (file.size > 10 * 1024 * 1024) {
+        const message = 'Tệp vượt giới hạn 10 MB.'
+        if (kind === 'invoice') setFileError(message)
+        else setPublicFileErrors((current) => ({ ...current, [kind]: message }))
+        return
+      }
       const bytes = await file.arrayBuffer()
       if (fileSelectionVersion.current[kind] !== version) return
       if (!matchesFileSignature(file, bytes, kind)) {
@@ -321,6 +325,11 @@ export function FarmerCreatePage() {
     const certificate = files.certificate
     const image = files.image
     if (!certificate?.sha256 || !image?.sha256) return false
+    const selection = { ...fileSelectionVersion.current }
+    const requireCurrentFiles = () => {
+      if (selection.certificate !== fileSelectionVersion.current.certificate || selection.image !== fileSelectionVersion.current.image)
+        throw new Error('Tệp đã thay đổi trong khi tải. Hãy tiếp tục lại với tệp vừa chọn.')
+    }
     setStepError('')
     try {
       let cert = uploads.certificate
@@ -328,16 +337,21 @@ export function FarmerCreatePage() {
       if (!cert) {
         setBusy('Đang tải chứng chỉ lên IPFS…')
         cert = await upload(certificate.file, certificate.file.name, 'certificate', certificate.sha256)
+        requireCurrentFiles()
+        setUploads((current) => ({ ...current, certificate: cert }))
       }
       if (!img) {
         setBusy('Đang tải ảnh lô lên IPFS…')
         img = await upload(image.file, image.file.name, 'image', image.sha256)
+        requireCurrentFiles()
+        setUploads((current) => ({ ...current, image: img }))
       }
       setBusy('Đang tạo và tải metadata.json lên IPFS…')
       const text = buildMetadata(cert, img)
       const bytes = utf8Bytes(text)
       const metaSha = await sha256Hex(bytes)
       const meta = await upload(new Blob([text], { type: 'application/json' }), 'metadata.json', 'metadata', metaSha)
+      requireCurrentFiles()
       setMetadataJson(text)
       setUploads((current) => ({ ...current, certificate: cert, image: img, metadata: meta }))
       return true
@@ -555,7 +569,7 @@ export function FarmerCreatePage() {
               </div>
               <div className="farmer-create-upload-grid">
                 <FilePicker id="farmer-create-certificate" label="Chứng chỉ PDF (công khai)" accept="application/pdf,.pdf" selected={files.certificate} onChange={(event) => void chooseFile('certificate', event)} hint="PDF gốc, tối đa 10 MB." error={publicFileErrors.certificate} publicFile cid={uploads.certificate?.cid} />
-                <FilePicker id="farmer-create-image" label="Ảnh gốc của lô (công khai)" accept="image/jpeg,image/png" selected={files.image} onChange={(event) => void chooseFile('image', event)} hint="JPG, JPEG hoặc PNG gốc, tối đa 10 MB." error={publicFileErrors.image} image publicFile cid={uploads.image?.cid} />
+                <FilePicker id="farmer-create-image" label="Ảnh gốc của lô (công khai)" accept="image/jpeg,image/png,image/webp" selected={files.image} onChange={(event) => void chooseFile('image', event)} hint="JPG, JPEG, PNG hoặc WebP gốc, tối đa 10 MB." error={publicFileErrors.image} image publicFile cid={uploads.image?.cid} />
               </div>
               <p className="farmer-create-footnote">SHA-256 được tính từ byte tệp đã chọn và được máy chủ tính lại để đối chiếu sau khi tải lên.</p>
             </>

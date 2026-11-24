@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSession } from '../../../app/session'
 import { Button, Card, EmptyState, ErrorState, LoadingState, Select } from '../../../components/ui'
-import { sha256Hex } from '../../../lib/hash'
 import {
   describeApiError,
-  downloadPrivateDocument,
+  downloadVerifiedPrivateDocument,
   grantDocumentAccess,
   listPrivateDocuments,
   revokeDocumentAccess,
@@ -37,6 +37,12 @@ function saveBlob(blob: Blob, filename: string) {
 }
 
 function DocumentCard({ doc, candidates, onChanged }: { doc: DocumentListItem; candidates: Candidate[]; onChanged: () => void }) {
+  const lifetime = useRef<AbortController | null>(null)
+  useEffect(() => {
+    const controller = new AbortController()
+    lifetime.current = controller
+    return () => controller.abort()
+  }, [])
   const [busy, setBusy] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
   const [target, setTarget] = useState('')
@@ -50,8 +56,10 @@ function DocumentCard({ doc, candidates, onChanged }: { doc: DocumentListItem; c
     setNotice(null)
     try {
       const message = await action()
+      if (lifetime.current?.signal.aborted) return
       if (message) setNotice({ tone: 'ok', text: message })
     } catch (error) {
+      if (lifetime.current?.signal.aborted) return
       setNotice({ tone: 'error', text: describeApiError(error) })
     } finally {
       setBusy(null)
@@ -60,17 +68,15 @@ function DocumentCard({ doc, candidates, onChanged }: { doc: DocumentListItem; c
 
   const download = () =>
     run('download', async () => {
-      const file = await downloadPrivateDocument(doc.id)
-      const actual = await sha256Hex(file.blob)
+      const file = await downloadVerifiedPrivateDocument(doc.id, doc.sha256, lifetime.current?.signal)
       saveBlob(file.blob, file.filename)
-      return actual === doc.sha256
-        ? 'Đã tải về. SHA-256 của tệp đã giải mã KHỚP với hash đã lưu khi tải lên.'
-        : 'Đã tải về nhưng SHA-256 KHÔNG khớp hash đã lưu. Đừng tin nội dung tệp này.'
+      return 'Đã tải về. SHA-256 của tệp đã giải mã KHỚP với hash đã lưu khi tải lên.'
     })
 
   const grant = () =>
     run('grant', async () => {
       await grantDocumentAccess(doc.id, target)
+      if (lifetime.current?.signal.aborted) return
       setTarget('')
       onChanged()
       return 'Đã cấp quyền đọc.'
@@ -79,6 +85,7 @@ function DocumentCard({ doc, candidates, onChanged }: { doc: DocumentListItem; c
   const revoke = (wallet: string) =>
     run(`revoke:${wallet}`, async () => {
       await revokeDocumentAccess(doc.id, wallet)
+      if (lifetime.current?.signal.aborted) return
       onChanged()
       return 'Đã thu hồi quyền đọc. Chỉ chặn các lần tải sau, không thu hồi được bản đã tải về.'
     })
@@ -166,18 +173,31 @@ function DocumentCard({ doc, candidates, onChanged }: { doc: DocumentListItem; c
 
 /** Tab "Tài liệu riêng" của một lô: danh sách hóa đơn đã mã hóa, tải về và cấp / thu hồi quyền đọc. */
 export function PrivateDocumentsPanel({ tokenId }: Props) {
+  const { session } = useSession()
+  return <PrivateDocumentsContent key={`${session?.wallet.address}:${session?.expiresAt}:${tokenId}`} tokenId={tokenId} />
+}
+
+function PrivateDocumentsContent({ tokenId }: Props) {
   const [docs, setDocs] = useState<DocumentListItem[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [candidates, setCandidates] = useState<Candidate[]>([])
+  const loading = useRef<AbortController | null>(null)
 
   const load = useCallback(() => {
+    loading.current?.abort()
+    const controller = new AbortController()
+    loading.current = controller
     setError(null)
-    listPrivateDocuments(tokenId).then(setDocs, (reason) => setError(describeApiError(reason)))
+    listPrivateDocuments(tokenId, controller.signal).then(
+      (items) => { if (!controller.signal.aborted) setDocs(items) },
+      (reason) => { if (!controller.signal.aborted) setError(describeApiError(reason)) },
+    )
   }, [tokenId])
 
   useEffect(() => {
     setDocs(null)
     load()
+    return () => loading.current?.abort()
   }, [load])
 
   useEffect(() => {

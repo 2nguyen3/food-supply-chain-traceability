@@ -5,6 +5,7 @@ DApp tạo JSON và giữ nguyên một chuỗi byte; backend chỉ kiểm cấu
 khoảng trắng cũng đổi hash.
 """
 import json
+import math
 import re
 
 QUANTITY_KG = 1000
@@ -23,7 +24,7 @@ class MetadataInvalid(ValueError):
 
 
 def _is_number(v) -> bool:
-    return isinstance(v, (int, float)) and not isinstance(v, bool)
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and (isinstance(v, int) or math.isfinite(v))
 
 
 def check_metadata(content: bytes) -> dict:

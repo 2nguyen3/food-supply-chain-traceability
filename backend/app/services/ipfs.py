@@ -46,10 +46,10 @@ class PinataClient:
             cid = resp.json()["data"]["cid"]
         except httpx.HTTPStatusError as exc:
             raise IpfsUploadError(f"Pinata trả HTTP {exc.response.status_code}") from None
-        except (httpx.HTTPError, KeyError, ValueError) as exc:
+        except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
             raise IpfsUploadError(f"Upload IPFS lỗi: {type(exc).__name__}") from None
-        if not cid:
-            raise IpfsUploadError("Pinata không trả CID")
+        if not isinstance(cid, str) or not CID_PATTERN.fullmatch(cid):
+            raise IpfsUploadError("Pinata không trả CID hợp lệ")
         return cid
 
 

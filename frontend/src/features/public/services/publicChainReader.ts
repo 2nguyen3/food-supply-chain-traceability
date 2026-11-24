@@ -12,6 +12,8 @@ import { config, networkName } from '../../../config/env'
 import abiFile from '../../../contracts/FoodTraceability.json'
 import type { Lifecycle } from '../../../domain/types'
 import { sha256Hex } from '../../../lib/hash'
+import { imageFormat } from '../../../lib/imageFormat'
+import { readResponseBytes } from '../../../lib/readResponseBytes'
 import { argsOf, makeLogQuery } from '../../../services/chainLogs'
 import type {
   DemoBatch,
@@ -130,8 +132,7 @@ async function fetchIpfsBytes(cid: string, signal: AbortSignal): Promise<Uint8Ar
         signal: AbortSignal.any([signal, timeout]),
       })
       if (!response.ok) continue
-      const bytes = new Uint8Array(await response.arrayBuffer())
-      if (bytes.length <= MAX_FILE_BYTES) return bytes
+      return await readResponseBytes(response, MAX_FILE_BYTES)
     } catch (error) {
       if (signal.aborted) throw error
     }
@@ -431,7 +432,9 @@ async function readBatchFromChain(
       (await sha256Hex(metaBytes)) === chainHash(onChain.metadataHash) ? 'match' : 'mismatch'
     if (metaVerified === 'match') {
       try {
-        meta = JSON.parse(new TextDecoder().decode(metaBytes))
+        const parsed: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(metaBytes))
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('METADATA_INVALID')
+        meta = parsed as Record<string, unknown>
       } catch {
         warnings.push('Metadata không phải JSON hợp lệ.')
       }
@@ -443,6 +446,7 @@ async function readBatchFromChain(
 
   const certificateCid = cidOf(meta?.certificateURI)
   const imageCid = cidOf(meta?.image)
+  let imageName = 'Ảnh gốc'
   const verifyFile = async (
     cid: string | undefined,
     expected: string,
@@ -450,6 +454,10 @@ async function readBatchFromChain(
     if (!cid) return 'unavailable'
     const bytes = await fetchIpfsBytes(cid, signal)
     if (!bytes) return 'unavailable'
+    if (cid === imageCid) {
+      const format = imageFormat(bytes)
+      if (format) imageName = `batch.${format === 'jpeg' ? 'jpg' : format}`
+    }
     return (await sha256Hex(bytes)) === chainHash(expected) ? 'match' : 'mismatch'
   }
   const [certVerified, imageVerified] = await Promise.all([
@@ -459,6 +467,7 @@ async function readBatchFromChain(
   const documents: DemoDocument[] = [
     {
       name: 'certificate.pdf',
+      kind: 'certificate',
       label: 'Chứng chỉ PDF gốc',
       cid: certificateCid,
       sha256: chainHash(onChain.certificateHash),
@@ -466,7 +475,8 @@ async function readBatchFromChain(
       fileUrl: certificateCid ? ipfsFileUrl(certificateCid) : undefined,
     },
     {
-      name: 'batch.jpg',
+      name: imageName,
+      kind: 'image',
       label: 'Ảnh gốc của lô',
       cid: imageCid,
       sha256: chainHash(onChain.imageHash),
@@ -475,6 +485,7 @@ async function readBatchFromChain(
     },
     {
       name: 'metadata.json',
+      kind: 'metadata',
       label: 'Metadata JSON công khai',
       cid: metadataCid,
       sha256: chainHash(onChain.metadataHash),

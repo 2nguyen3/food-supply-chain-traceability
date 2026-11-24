@@ -19,7 +19,7 @@ from app.services.ipfs import PinataClient
 SCHEMA_VERSION = 1
 TX_HASH = re.compile(r"^0x[0-9a-fA-F]{64}$")
 BATCH_CREATED_TYPES = ("metadata", "certificate", "image")  # bind kèm receipt createBatch
-EXTENSION = {"application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "application/json": "json"}
+EXTENSION = {"application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "application/json": "json"}
 
 
 class DocumentNotFound(Exception):
