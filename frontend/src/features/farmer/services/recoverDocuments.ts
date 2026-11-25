@@ -31,18 +31,43 @@ function findRecoveryDocument(
         (doc.status === 'bound' && doc.token_id === tokenId)),
   )
 
-  // Ưu tiên hồ sơ đã gắn đúng NFT, tránh bind trùng.
+  // Nếu đã gắn đúng NFT, ưu tiên sử dụng hồ sơ đó.
   const bound = matches.filter((doc) => doc.status === 'bound')
-  const candidates = bound.length > 0 ? bound : matches
 
-  if (candidates.length !== 1) {
+  if (bound.length === 1) return bound[0]
+
+  if (bound.length > 1) {
     throw new Error(
-      `Không tìm được duy nhất một hồ sơ ${type} ` +
-        `khớp NFT #${tokenId}. Số kết quả: ${candidates.length}.`,
+      `Có ${bound.length} hồ sơ ${type} đã gắn với NFT #${tokenId}. ` +
+        'Cần kiểm tra trước khi tiếp tục.',
     )
   }
 
-  return candidates[0]
+  if (matches.length === 0) {
+    throw new Error(`Không tìm thấy hồ sơ ${type} khớp NFT #${tokenId}.`)
+  }
+
+  if (matches.length === 1) return matches[0]
+
+  // Nhiều draft chỉ được coi là tương đương khi
+  // cả SHA-256 lẫn CID đều giống nhau.
+  const first = matches[0]
+
+  const identical = matches.every(
+    (doc) => normalizeHash(doc.sha256) === normalizeHash(first.sha256) && doc.cid === first.cid,
+  )
+
+  if (!identical) {
+    throw new Error(
+      `Có ${matches.length} hồ sơ ${type} trùng hash nhưng ` + 'khác CID. Cần kiểm tra thủ công.',
+    )
+  }
+
+  // Các bản ghi có cùng nội dung: chọn bản upload mới nhất.
+  // Document ID được dùng để sắp xếp ổn định nếu trùng thời gian.
+  return [...matches].sort(
+    (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at) || a.id.localeCompare(b.id),
+  )[0]
 }
 
 /** Chỉ đọc Blockchain và đối chiếu draft, không gửi giao dịch hay bind. */

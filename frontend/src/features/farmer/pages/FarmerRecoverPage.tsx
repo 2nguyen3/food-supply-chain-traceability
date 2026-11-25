@@ -52,9 +52,7 @@ function FarmerRecoverContent() {
   const drafts = documents.filter((doc) => doc.status === 'draft')
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [error, setError] = useState('')
-  const [txHash, setTxHash] = useState(
-    '0xf7a1de2b5808554387367d15a1bac9640f784b4323e754817cf90dfc3d1e6a7e',
-  )
+  const [txHash, setTxHash] = useState('')
   const [verifying, setVerifying] = useState(false)
   const [match, setMatch] = useState<RecoveryMatch | null>(null)
   const [verifyError, setVerifyError] = useState('')
