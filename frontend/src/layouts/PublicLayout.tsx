@@ -6,6 +6,8 @@ import { config, networkName } from '../config/env'
 export function PublicLayout() {
   const [menu, setMenu] = useState(false)
   const location = useLocation()
+  // On /connect the main card already has the "Kết nối MetaMask" action.
+  const isConnectPage = /^\/connect\/?$/.test(location.pathname)
   const { session } = useSession()
   useEffect(() => setMenu(false), [location.pathname])
   const dashboard = session?.wallet.chainId === config.chainId ? session.wallet.roles[0] : undefined
@@ -32,11 +34,13 @@ export function PublicLayout() {
               Tra cứu lô
             </NavLink>
           </nav>
-          <div className="header-actions">
-            <Link className="button" to={dashboard ? `/${dashboard}/overview` : '/connect'}>
-              {dashboard ? 'Vào bảng điều khiển' : 'Kết nối ví'}
-            </Link>
-          </div>
+          {!isConnectPage && (
+            <div className="header-actions">
+              <Link className="button" to={dashboard ? `/${dashboard}/overview` : '/connect'}>
+                {dashboard ? 'Vào bảng điều khiển' : 'Kết nối ví'}
+              </Link>
+            </div>
+          )}
           <button
             className="button secondary menu-toggle"
             aria-label={menu ? 'Đóng menu' : 'Mở menu'}
@@ -54,9 +58,11 @@ export function PublicLayout() {
             <Link className="nav-link" to="/trace">
               Tra cứu lô
             </Link>
-            <Link className="nav-link" to={dashboard ? `/${dashboard}/overview` : '/connect'}>
-              {dashboard ? 'Vào bảng điều khiển' : 'Kết nối ví'}
-            </Link>
+            {!isConnectPage && (
+              <Link className="nav-link" to={dashboard ? `/${dashboard}/overview` : '/connect'}>
+                {dashboard ? 'Vào bảng điều khiển' : 'Kết nối ví'}
+              </Link>
+            )}
           </nav>
         )}
       </header>

@@ -313,10 +313,30 @@ async function readBatchFromChain(
   for (const log of incidents) {
     const a = argsOf(log)
     const cid = cidOf(a.reportCID) ?? String(a.reportCID)
-    await push(log, 'IncidentReported', `Retailer báo cáo sự cố #${a.incidentId}.`, {
-      label: 'Xem báo cáo sự cố',
-      url: ipfsFileUrl(cid),
-    })
+    // The configured private gateway may return 403 / ERR_ID:00006.
+    // Reuse the working public gateway and only link a verified original PDF.
+    const reportAsset = await fetchIpfsAsset(cid, signal)
+    const expectedHash = chainHash(String(a.reportHash))
+    const actualHash = reportAsset ? await sha256Hex(reportAsset.bytes) : undefined
+    const isOriginalPdf =
+      reportAsset !== null &&
+      new TextDecoder().decode(reportAsset.bytes.slice(0, 5)) === '%PDF-'
+    const verified = Boolean(reportAsset && isOriginalPdf && actualHash === expectedHash)
+    if (!verified) {
+      warnings.push(
+        reportAsset
+          ? `Báo cáo sự cố #${a.incidentId}: PDF hoặc SHA-256 không khớp dữ liệu blockchain.`
+          : `Báo cáo sự cố #${a.incidentId}: không tải được PDF từ các IPFS gateway.`,
+      )
+    }
+    await push(
+      log,
+      'IncidentReported',
+      `Retailer báo cáo sự cố #${a.incidentId}.`,
+      verified && reportAsset
+        ? { label: 'Xem báo cáo sự cố', url: reportAsset.url }
+        : undefined,
+    )
   }
   // Lý do thu hồi: manifest JSON có CID ghi trên chain, đối chiếu SHA-256 trên đúng byte tải về.
   // Lý do chỉ hiển thị khi manifest đúng schema và đúng lô/sự cố; PDF gốc cũng được đối chiếu hash.
