@@ -2,7 +2,8 @@ import { api } from './api'
 import { HttpError } from './http'
 import { sha256Hex } from '../lib/hash'
 
-export type DocType = 'certificate' | 'image' | 'metadata' | 'invoice' | 'incident_report' | 'recall_reason'
+export type DocType =
+  'certificate' | 'image' | 'metadata' | 'invoice' | 'incident_report' | 'recall_reason'
 
 export interface DocumentOut {
   id: string
@@ -59,7 +60,23 @@ export function uploadDocument(
   return api.request<DocumentOut>('/documents', { method: 'POST', body: form, signal })
 }
 
-/** Gắn bản nháp vào lô. Tài liệu của createBatch cần txHash; hóa đơn và báo cáo sự cố thì không. */
+/** Lấy hồ sơ draft của chính ví đang đăng nhập. */
+export function listDraftDocuments(signal?: AbortSignal): Promise<DocumentOut[]> {
+  return api.request<DocumentOut[]>('/documents/drafts', {
+    signal,
+    cache: 'no-store',
+  })
+}
+
+/** Lấy hồ sơ của ví đang đăng nhập, bao gồm draft và bound. */
+export function listMyDocuments(signal?: AbortSignal): Promise<DocumentOut[]> {
+  return api.request<DocumentOut[]>('/documents/mine', {
+    signal,
+    cache: 'no-store',
+  })
+}
+
+/** Gắn hồ sơ vào NFT. Metadata/chứng chỉ/ảnh cần txHash; hóa đơn có thể dùng txHash để tránh quét log. */
 export function bindDocument(id: string, tokenId: string, txHash?: string): Promise<BindResult> {
   return api.request<BindResult>(`/documents/${id}/bind`, {
     method: 'POST',
@@ -68,12 +85,21 @@ export function bindDocument(id: string, tokenId: string, txHash?: string): Prom
 }
 
 /** Tài liệu riêng đã gắn vào lô mà ví đang đăng nhập được phép đọc. */
-export function listPrivateDocuments(tokenId: string, signal?: AbortSignal): Promise<DocumentListItem[]> {
-  return api.request<DocumentListItem[]>(`/documents?token_id=${encodeURIComponent(tokenId)}`, { signal, cache: 'no-store' })
+export function listPrivateDocuments(
+  tokenId: string,
+  signal?: AbortSignal,
+): Promise<DocumentListItem[]> {
+  return api.request<DocumentListItem[]>(`/documents?token_id=${encodeURIComponent(tokenId)}`, {
+    signal,
+    cache: 'no-store',
+  })
 }
 
 export function grantDocumentAccess(id: string, wallet: string): Promise<GrantOut> {
-  return api.request<GrantOut>(`/documents/${id}/grants`, { method: 'POST', body: JSON.stringify({ wallet }) })
+  return api.request<GrantOut>(`/documents/${id}/grants`, {
+    method: 'POST',
+    body: JSON.stringify({ wallet }),
+  })
 }
 
 export function revokeDocumentAccess(id: string, wallet: string): Promise<void> {
@@ -81,20 +107,38 @@ export function revokeDocumentAccess(id: string, wallet: string): Promise<void> 
 }
 
 /** Tải bản đã giải mã của tài liệu riêng; backend kiểm lại vai trò on-chain và quyền đọc mỗi lần. */
-export async function downloadPrivateDocument(id: string, signal?: AbortSignal): Promise<DownloadedDocument> {
+export async function downloadPrivateDocument(
+  id: string,
+  signal?: AbortSignal,
+): Promise<DownloadedDocument> {
   const response = await api.requestRaw(`/documents/${id}/content`, { signal, cache: 'no-store' })
   const disposition = response.headers.get('Content-Disposition') ?? ''
   const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? 'tai-lieu'
-  return { blob: await response.blob(), filename, sha256: response.headers.get('X-Document-Sha256') ?? '' }
+  return {
+    blob: await response.blob(),
+    filename,
+    sha256: response.headers.get('X-Document-Sha256') ?? '',
+  }
 }
 
 /** Chỉ trả tệp cho thao tác lưu khi byte giải mã khớp cả danh sách và header backend. */
-export async function downloadVerifiedPrivateDocument(id: string, expectedHash: string, signal?: AbortSignal): Promise<DownloadedDocument> {
+export async function downloadVerifiedPrivateDocument(
+  id: string,
+  expectedHash: string,
+  signal?: AbortSignal,
+): Promise<DownloadedDocument> {
   const file = await downloadPrivateDocument(id, signal)
   const actual = await sha256Hex(file.blob)
   signal?.throwIfAborted()
-  if (!/^[0-9a-f]{64}$/i.test(expectedHash) || actual !== expectedHash.toLowerCase() || actual !== file.sha256.toLowerCase())
-    throw new HttpError('PRIVATE_HASH_MISMATCH', 'SHA-256 của hóa đơn không khớp. Tệp chưa được tải xuống.')
+  if (
+    !/^[0-9a-f]{64}$/i.test(expectedHash) ||
+    actual !== expectedHash.toLowerCase() ||
+    actual !== file.sha256.toLowerCase()
+  )
+    throw new HttpError(
+      'PRIVATE_HASH_MISMATCH',
+      'SHA-256 của hóa đơn không khớp. Tệp chưa được tải xuống.',
+    )
   return file
 }
 

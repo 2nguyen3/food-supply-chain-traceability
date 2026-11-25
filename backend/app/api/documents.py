@@ -49,6 +49,27 @@ def list_documents(
         for doc, grants in items
     ]
 
+@router.get("/drafts", response_model=list[DocumentOut])
+def list_draft_documents(
+    response: Response,
+    wallet: str = Depends(current_wallet),
+    db: Session = Depends(get_session),
+):
+    """Lấy các hồ sơ draft do chính ví đăng nhập tải lên."""
+    response.headers["Cache-Control"] = "no-store"
+    docs = document_service.list_draft_documents(db, wallet)
+    return [_out(doc) for doc in docs]
+
+@router.get("/mine", response_model=list[DocumentOut])
+def list_my_documents(
+    response: Response,
+    wallet: str = Depends(current_wallet),
+    db: Session = Depends(get_session),
+):
+    """Trả các hồ sơ draft/bound của chính ví đang đăng nhập."""
+    response.headers["Cache-Control"] = "no-store"
+    docs = document_service.list_my_documents(db, wallet)
+    return [_out(doc) for doc in docs]
 
 @router.post("", status_code=201, response_model=DocumentOut)
 def upload_document(

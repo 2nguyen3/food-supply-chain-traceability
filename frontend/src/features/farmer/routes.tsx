@@ -4,6 +4,7 @@ import { FarmerBatchesPage } from './pages/FarmerBatchesPage'
 import { FarmerBatchDetailPage } from './pages/FarmerBatchDetailPage'
 import { FarmerCreatePage } from './pages/FarmerCreatePage'
 import { FarmerTransfersPage } from './pages/FarmerTransfersPage'
+import { FarmerRecoverPage } from './pages/FarmerRecoverPage'
 export const farmerRoutes: RouteObject[] = [
   { path: 'overview', element: <FarmerOverviewPage /> },
   { path: 'batches', element: <FarmerBatchesPage /> },
@@ -14,6 +15,10 @@ export const farmerRoutes: RouteObject[] = [
   {
     path: 'create',
     element: <FarmerCreatePage />,
+  },
+  {
+    path: 'recover',
+    element: <FarmerRecoverPage />,
   },
   {
     path: 'transfers',

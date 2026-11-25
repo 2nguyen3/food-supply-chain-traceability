@@ -300,3 +300,204 @@ def test_bind_recall_reason_needs_admin_and_existing_lot(api, lot):
     api.chain.take(api.people["admin"].address, "ADMIN_ROLE")  # mất quyền Admin trước khi bind
     assert err(bind(api, "admin", other, tx=None)) == (403, "NOT_UPLOADER")
     assert err(bind(api, "farmerA", reason, tx=None)) == (403, "NOT_UPLOADER")
+
+def test_list_drafts_only_owner_and_unbound(api, lot):
+    """Chỉ ví uploader thấy draft, hồ sơ bound không còn trong danh sách."""
+    route = "/documents/drafts"
+
+    invoice = upload(
+        api, "farmerA", "invoice", b"%PDF-1.7 hoa don rieng"
+    ).json()
+    other = upload(
+        api, "farmerB", "certificate", PDF
+    ).json()
+
+    response = api.client.get(
+        route, headers=api.headers["farmerA"]
+    )
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+
+    drafts = response.json()
+    draft_ids = {doc["id"] for doc in drafts}
+
+    expected = {
+        lot["certificate"]["id"],
+        lot["image"]["id"],
+        lot["metadata"]["id"],
+        invoice["id"],
+    }
+    assert expected.issubset(draft_ids)
+    assert other["id"] not in draft_ids
+    assert all(doc["status"] == "draft" for doc in drafts)
+    assert all(doc["token_id"] is None for doc in drafts)
+
+    # Người chưa đăng nhập không được xem.
+    assert api.client.get(route).status_code == 401
+
+    # Khi một hồ sơ được bind, nó không còn là draft.
+    result = bind(api, "farmerA", lot["metadata"])
+    assert result.status_code == 200
+
+    after = api.client.get(
+        route, headers=api.headers["farmerA"]
+    )
+    after_ids = {doc["id"] for doc in after.json()}
+    assert lot["metadata"]["id"] not in after_ids
+
+
+def test_list_my_documents_includes_draft_and_bound(api, lot):
+    """API /mine trả draft và bound của đúng uploader."""
+    path = "/documents/mine"
+
+    # Farmer B upload một hồ sơ riêng.
+    other = upload(api, "farmerB", "certificate", PDF).json()
+
+    # Chưa đăng nhập không được truy cập.
+    assert api.client.get(path).status_code == 401
+
+    # Trước khi bind: Farmer A thấy ba hồ sơ draft.
+    before = api.client.get(path, headers=api.headers["farmerA"])
+    assert before.status_code == 200
+    assert before.headers["cache-control"] == "no-store"
+
+    before_docs = {doc["id"]: doc for doc in before.json()}
+    for kind in ("metadata", "certificate", "image"):
+        doc_id = lot[kind]["id"]
+        assert doc_id in before_docs
+        assert before_docs[doc_id]["status"] == "draft"
+
+    # Farmer A không được thấy hồ sơ Farmer B.
+    assert other["id"] not in before_docs
+
+    # Bind metadata vào NFT #1.
+    result = bind(api, "farmerA", lot["metadata"])
+    assert result.status_code == 200
+
+    # Sau khi bind: metadata vẫn xuất hiện trong /mine.
+    after = api.client.get(path, headers=api.headers["farmerA"])
+    assert after.status_code == 200
+
+    after_docs = {doc["id"]: doc for doc in after.json()}
+    metadata = after_docs[lot["metadata"]["id"]]
+
+    assert metadata["status"] == "bound"
+    assert metadata["token_id"] == "1"
+    assert after_docs[lot["certificate"]["id"]]["status"] == "draft"
+    assert after_docs[lot["image"]["id"]]["status"] == "draft"
+
+    # Không tiết lộ các trường khóa mã hóa.
+    for doc in after.json():
+        assert "wrapped_key" not in doc
+        assert "aad" not in doc
+        assert "wrap_iv" not in doc
+        assert "wrap_tag" not in doc
+
+    # Farmer B chỉ thấy hồ sơ của chính mình.
+    farmer_b = api.client.get(path, headers=api.headers["farmerB"])
+    assert farmer_b.status_code == 200
+    assert {doc["id"] for doc in farmer_b.json()} == {other["id"]}
+
+
+def test_recovery_resumes_after_partial_bind(api, lot):
+    """Khôi phục bộ hồ sơ khi bind bị gián đoạn giữa chừng."""
+    route = "/documents/mine"
+    headers = api.headers["farmerA"]
+
+    # Metadata gắn thành công vào NFT #1.
+    first = bind(api, "farmerA", lot["metadata"])
+    assert first.status_code == 200
+    assert first.json()["token_id"] == "1"
+
+    # Giả lập lỗi khi gắn chứng chỉ bằng tx hash không hợp lệ.
+    failed = bind(api, "farmerA", lot["certificate"], tx=TX_OTHER)
+    assert err(failed) == (422, "TX_RECEIPT_INVALID")
+
+    # Đọc lại trạng thái sau gián đoạn.
+    response = api.client.get(route, headers=headers)
+    assert response.status_code == 200
+
+    docs = {doc["id"]: doc for doc in response.json()}
+
+    assert docs[lot["metadata"]["id"]]["status"] == "bound"
+    assert docs[lot["metadata"]["id"]]["token_id"] == "1"
+
+    assert docs[lot["certificate"]["id"]]["status"] == "draft"
+    assert docs[lot["image"]["id"]]["status"] == "draft"
+
+    # Metadata đã bound: gọi lại phải an toàn (idempotent).
+    repeated = bind(api, "farmerA", lot["metadata"])
+    assert repeated.status_code == 200
+    assert repeated.json() == first.json()
+
+    # Tiếp tục gắn hai hồ sơ còn thiếu.
+    certificate = bind(api, "farmerA", lot["certificate"])
+    image = bind(api, "farmerA", lot["image"])
+
+    assert certificate.status_code == 200
+    assert image.status_code == 200
+
+    # Kiểm tra cuối cùng: ba hồ sơ đều bound với NFT #1.
+    final = api.client.get(route, headers=headers)
+    assert final.status_code == 200
+
+    final_docs = {doc["id"]: doc for doc in final.json()}
+
+    for kind in ("metadata", "certificate", "image"):
+        doc = final_docs[lot[kind]["id"]]
+        assert doc["status"] == "bound"
+        assert doc["token_id"] == "1"
+
+    # Không phát sinh bản ghi tài liệu mới khi thử lại.
+    assert len(final_docs) == 3
+
+
+def test_bind_invoice_with_receipt_without_scanning_logs(api, lot, monkeypatch):
+    """Gắn invoice bằng receipt, không cần quét BatchCreated logs."""
+
+    invoice = upload(
+        api, "farmerA", "invoice", b"%PDF-1.7 hoa don recovery"
+    ).json()
+
+    def forbidden_scan(*args, **kwargs):
+        raise AssertionError("Không được quét lịch sử BatchCreated")
+
+    monkeypatch.setattr(
+        api.chain, "get_batch_creator", forbidden_scan
+    )
+
+    # Receipt hợp lệ: bind thành công.
+    result = bind(api, "farmerA", invoice, tx=TX)
+
+    assert result.status_code == 200, result.text
+    assert result.json()["status"] == "bound"
+    assert result.json()["token_id"] == "1"
+    assert result.json()["bind_tx_hash"] == TX
+
+    # Thử lại cùng receipt không tạo bản ghi mới.
+    again = bind(api, "farmerA", invoice, tx=TX)
+    assert again.status_code == 200
+    assert again.json() == result.json()
+
+    # Farmer khác không thể dùng receipt của Farmer A.
+    other = upload(
+        api, "farmerB", "invoice", b"%PDF-1.7 hoa don farmer B"
+    ).json()
+
+    assert err(bind(api, "farmerB", other, tx=TX)) == (
+        422, "TX_RECEIPT_INVALID"
+    )
+
+    # Transaction hash không tồn tại cũng bị từ chối.
+    invalid = upload(
+        api, "farmerA", "invoice", b"%PDF-1.7 invoice invalid"
+    ).json()
+
+    assert err(bind(api, "farmerA", invalid, tx=TX_OTHER)) == (
+        422, "TX_RECEIPT_INVALID"
+    )
+
+    # Không chấp nhận định dạng tx hash sai.
+    assert err(bind(api, "farmerA", invalid, tx="invalid")) == (
+        422, "INVALID_REQUEST"
+    )

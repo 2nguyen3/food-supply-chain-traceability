@@ -26,6 +26,7 @@ const NAV: Record<Role, NavItem[]> = {
     { to: 'overview', label: 'Tổng quan', icon: 'home' },
     { to: 'batches', label: 'Lô của tôi', icon: 'box' },
     { to: 'create', label: 'Tạo lô NFT', icon: 'plus' },
+    { to: 'recover', label: 'Khôi phục hồ sơ', icon: 'download' },
     { to: 'transfers', label: 'Chuyển giao', icon: 'route' },
   ],
   logistics: [
@@ -121,7 +122,9 @@ function NotificationBell({ items = [] }: { items?: readonly NotificationItem[] 
             <ul className="topbar-notification-list">
               {items.map((item) => (
                 <li key={item.id}>
-                  <Link to={item.to} onClick={() => setOpen(false)}>{item.text}</Link>
+                  <Link to={item.to} onClick={() => setOpen(false)}>
+                    {item.text}
+                  </Link>
                 </li>
               ))}
             </ul>

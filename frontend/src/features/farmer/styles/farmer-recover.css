@@ -1,0 +1,92 @@
+.farmer-recover-page {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+
+.farmer-recover-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 20px;
+}
+
+.farmer-recover-list h2 {
+  margin-top: 0;
+}
+
+.farmer-recover-fields {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.farmer-recover-fields dt {
+  font-weight: 700;
+}
+
+.farmer-recover-fields dd {
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.farmer-recover-verify {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.farmer-recover-verify input {
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow-wrap: anywhere;
+}
+
+.farmer-recover-verify button {
+  justify-self: start;
+}
+
+.farmer-recover-result {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+
+.farmer-recover-invoice {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.farmer-recover-invoice select {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: white;
+  color: var(--cocoa);
+}
+
+.farmer-recover-invoice-detail {
+  overflow-wrap: anywhere;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.farmer-recover-invoice-detail p {
+  margin: 6px 0;
+}
+
+.farmer-recover-invoice button {
+  justify-self: start;
+}

@@ -95,6 +95,37 @@ def create_document(
     db.refresh(doc)
     return doc
 
+# ---------- recovery: list uploaded drafts ----------
+def list_draft_documents(db: Session, wallet: str) -> list[Document]:
+    """Liệt kê hồ sơ chưa gắn NFT của chính ví đang đăng nhập.
+
+    Chỉ đọc dữ liệu; không thay đổi trạng thái documents.
+    """
+    query = (
+        select(Document)
+        .where(
+            func.lower(Document.uploader) == wallet.lower(),
+            Document.token_id.is_(None),
+        )
+        .order_by(Document.created_at.desc(), Document.id.desc())
+        .limit(100)
+    )
+    return list(db.scalars(query).all())
+
+
+def list_my_documents(db: Session, wallet: str) -> list[Document]:
+    """Liệt kê các hồ sơ của ví, gồm draft và bound.
+
+    Chỉ đọc, không trả khóa mã hóa hoặc thay đổi database.
+    """
+    query = (
+        select(Document)
+        .where(func.lower(Document.uploader) == wallet.lower())
+        .order_by(Document.created_at.desc(), Document.id.desc())
+        .limit(200)
+    )
+    return list(db.scalars(query).all())
+
 
 # ---------- bind ----------
 def _load_owned(db: Session, wallet: str, doc_id: uuid.UUID) -> Document:
@@ -116,7 +147,9 @@ def bind_document(
     tid = int(token_id)
 
     from_receipt = doc.doc_type in BATCH_CREATED_TYPES
-    if from_receipt:
+    invoice_with_receipt = doc.doc_type == "invoice" and tx_hash is not None
+
+    if from_receipt or invoice_with_receipt:
         if not tx_hash or not TX_HASH.match(tx_hash):
             raise InvalidRequest("Cần tx_hash hợp lệ (0x + 64 ký tự hex)")
         tx_hash = tx_hash.lower()
@@ -128,7 +161,7 @@ def bind_document(
             return doc
         raise AlreadyBound()
 
-    if from_receipt:
+    if from_receipt or invoice_with_receipt:
         _check_receipt(chain, doc, tid, tx_hash)
     else:
         _check_post_mint(chain, doc, tid, from_block)
@@ -141,9 +174,17 @@ def bind_document(
     )
     db.commit()
     db.refresh(doc)
-    if result.rowcount != 1 and not (int(doc.token_id) == tid and (doc.bind_tx_hash or None) == tx_hash):
-        raise AlreadyBound()
+
+    if result.rowcount != 1:
+        if (
+            doc.token_id is None
+            or int(doc.token_id) != tid
+            or (doc.bind_tx_hash or None) != tx_hash
+        ):
+            raise AlreadyBound()
+
     return doc
+
 
 
 def _check_receipt(chain: ChainClient, doc: Document, tid: int, tx_hash: str) -> None:
@@ -155,10 +196,20 @@ def _check_receipt(chain: ChainClient, doc: Document, tid: int, tx_hash: str) ->
         raise TxReceiptInvalid(str(exc)) from None
     if created["farmer"] != doc.uploader.lower():
         raise TxReceiptInvalid("Người tạo lô trong receipt không phải uploader")
+
     if created["token_id"] != tid:
         raise TxReceiptInvalid("tokenId trong receipt không khớp token_id")
 
+    # Hóa đơn là tài liệu riêng được tạo sau mint.
+    # Receipt dùng để xác minh Farmer và NFT, không đối chiếu
+    # hash hóa đơn vì hash này không nằm trong createBatch.
+    if doc.doc_type == "invoice":
+        if chain.get_batch(tid) is None:
+            raise TxReceiptInvalid("Lô không tồn tại trên chain")
+        return
+
     digest = bytes(doc.sha256)
+
     if doc.doc_type == "metadata":
         if digest != created["metadata_hash"] or doc.cid != created["metadata_cid"]:
             raise HashMismatch()
