@@ -971,3 +971,83 @@
   width: 14px;
   height: 14px;
 }
+
+/* COCOMARK B12: responsive recall banner and reliable file links */
+.trace-alert-recall > div:not(.trace-alert-icon) {
+  flex: 1 1 0%;
+  min-width: 0;
+}
+
+.trace-alert-recall .trace-recall-reason,
+.trace-alert-recall .trace-recall-file,
+.trace-alert-recall .trace-recall-missing,
+.trace-alert-recall small {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.trace-alert-recall .trace-recall-file a,
+.trace-alert-recall .trace-recall-file-label {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.trace-alert-recall .trace-recall-file-label {
+  color: var(--cocoa);
+  font-weight: 600;
+}
+
+.trace-alert-recall .trace-recall-verify {
+  display: inline-block;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px) {
+  .trace-alert-recall {
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 14px;
+  }
+
+  .trace-alert-recall .trace-alert-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .trace-alert-recall .trace-alert-icon .trace-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .trace-alert-recall .trace-recall-file {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 7px;
+  }
+
+  .trace-alert-recall .trace-recall-reason {
+    padding: 10px;
+  }
+
+  .trace-alert-recall small {
+    line-height: 1.5;
+  }
+}
+
+@media (max-width: 390px) {
+  .trace-alert-recall {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .trace-alert-recall .trace-alert-icon {
+    width: 28px;
+    height: 28px;
+  }
+}

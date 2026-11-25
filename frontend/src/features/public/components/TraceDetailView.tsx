@@ -84,9 +84,19 @@ export function TraceDetailView({ batch }: { batch: DemoBatch }) {
               )}
               {batch.recall?.pdf && (
                 <p className="trace-recall-file">
-                  <a href={batch.recall.pdf.fileUrl} target="_blank" rel="noopener noreferrer">
-                    {batch.recall.pdf.label} · {batch.recall.pdf.name}
-                  </a>
+                  {batch.recall.pdf.verified === 'match' && batch.recall.pdf.fileUrl ? (
+                    <a
+                      href={batch.recall.pdf.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {batch.recall.pdf.label} · {batch.recall.pdf.name}
+                    </a>
+                  ) : (
+                    <span className="trace-recall-file-label">
+                      {batch.recall.pdf.label} · {batch.recall.pdf.name}
+                    </span>
+                  )}
                   <span
                     className={`trace-recall-verify ${batch.recall.pdf.verified ?? 'unavailable'}`}
                   >

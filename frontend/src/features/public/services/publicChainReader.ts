@@ -331,14 +331,17 @@ async function readBatchFromChain(
       label: 'Manifest lý do thu hồi',
       cid: reasonCid,
       sha256: reasonHash,
-      fileUrl: ipfsFileUrl(reasonCid),
+      fileUrl: undefined,
       verified: 'unavailable',
     }
     let reasonText: string | undefined
     let pdf: DemoDocument | undefined
-    const manifestBytes = await fetchIpfsBytes(reasonCid, signal)
-    if (manifestBytes) {
+    const manifestAsset = await fetchIpfsAsset(reasonCid, signal)
+    if (manifestAsset) {
+      const manifestBytes = manifestAsset.bytes
       manifest.verified = (await sha256Hex(manifestBytes)) === reasonHash ? 'match' : 'mismatch'
+      // Only link to verified bytes, using the gateway that actually delivered them.
+      manifest.fileUrl = manifest.verified === 'match' ? manifestAsset.url : undefined
       const isPdf = new TextDecoder().decode(manifestBytes.slice(0, 5)) === '%PDF-'
       if (manifest.verified !== 'match') {
         warnings.push(
@@ -372,7 +375,8 @@ async function readBatchFromChain(
             if (pdfInfo && typeof pdfInfo.cid === 'string' && typeof pdfInfo.sha256 === 'string') {
               const pdfCid = pdfInfo.cid
               const declared = String(pdfInfo.sha256).toLowerCase()
-              const pdfBytes = await fetchIpfsBytes(pdfCid, signal)
+              const pdfAsset = await fetchIpfsAsset(pdfCid, signal)
+              const pdfBytes = pdfAsset?.bytes
               const verified: DemoDocument['verified'] = pdfBytes
                 ? (await sha256Hex(pdfBytes)) === declared
                   ? 'match'
@@ -383,7 +387,8 @@ async function readBatchFromChain(
                 label: 'PDF lý do thu hồi',
                 cid: pdfCid,
                 sha256: declared,
-                fileUrl: ipfsFileUrl(pdfCid),
+                // Never advertise an unverified or broken PDF URL.
+                fileUrl: verified === 'match' ? pdfAsset?.url : undefined,
                 verified,
               }
             }
@@ -413,7 +418,7 @@ async function readBatchFromChain(
     const cid = cidOf(a.reasonCID) ?? String(a.reasonCID)
     await push(log, 'BatchRecalled', `Admin thu hồi lô theo sự cố #${a.incidentId}.`, {
       label: recall?.pdf ? 'Xem lý do thu hồi (PDF)' : 'Xem manifest lý do thu hồi',
-      url: recall?.pdf?.fileUrl ?? ipfsFileUrl(cid),
+      url: recall?.pdf?.fileUrl ?? recall?.manifest?.fileUrl ?? ipfsFileUrl(cid),
     })
   }
 
