@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Button, Card, LoadingState } from '../../../components/ui'
 import { config, networkName } from '../../../config/env'
@@ -137,13 +137,16 @@ export function TraceBlockchainPage() {
   )
   const [attempt, setAttempt] = useState(0)
   const [readState, setReadState] = useState<ReadState | null>(null)
+  const historyController = useRef<AbortController | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState('')
   const requestKey = `${chainId}/${contractAddress}/${tokenId}/${attempt}`
   const identity = parsed.identity
 
   useEffect(() => {
     if (!identity) return
     const controller = new AbortController()
-    inspectPublicChain(identity, controller.signal).then(
+    inspectPublicChain(identity, controller.signal, false).then(
       (status) => {
         if (!controller.signal.aborted) setReadState({ key: requestKey, status })
       },
@@ -154,6 +157,13 @@ export function TraceBlockchainPage() {
     )
     return () => controller.abort()
   }, [identity, requestKey])
+
+  useEffect(() => {
+    historyController.current?.abort()
+    setHistoryLoading(false)
+    setHistoryError('')
+    return () => historyController.current?.abort()
+  }, [requestKey])
 
   const loading = !!identity && readState?.key !== requestKey
   const status = !loading ? readState?.status : undefined
@@ -169,7 +179,31 @@ export function TraceBlockchainPage() {
           ? 'Đã đọc dữ liệu'
           : 'Chưa đọc dữ liệu'
 
-  if (status?.kind === 'ok') return <TraceDetailView batch={status.batch} />
+  const loadHistory = async () => {
+    if (!identity || status?.kind !== 'ok' || historyLoading || status.batch.historyLoaded) return
+    historyController.current?.abort()
+    const controller = new AbortController()
+    historyController.current = controller
+    setHistoryLoading(true)
+    setHistoryError('')
+    try {
+      const result = await inspectPublicChain(identity, controller.signal, true)
+      if (controller.signal.aborted) return
+      if (result.kind === 'ok') {
+        setReadState({ key: requestKey, status: result })
+      } else {
+        setHistoryError('Không tải được lịch sử Blockchain. Thông tin lô và hồ sơ công khai vẫn có thể xem.')
+      }
+    } catch {
+      if (!controller.signal.aborted)
+        setHistoryError('Không tải được lịch sử Blockchain. Vui lòng thử lại sau.')
+    } finally {
+      if (!controller.signal.aborted) setHistoryLoading(false)
+    }
+  }
+
+  if (status?.kind === 'ok')
+    return <TraceDetailView batch={status.batch} onLoadHistory={() => void loadHistory()} historyLoading={historyLoading} historyError={historyError} />
 
   return (
     <div className="trace-blockchain-page">

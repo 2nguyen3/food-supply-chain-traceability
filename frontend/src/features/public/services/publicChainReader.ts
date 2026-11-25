@@ -6,6 +6,7 @@ import {
   keccak256,
   toUtf8Bytes,
   ZeroAddress,
+  type EventLog,
   type Log,
 } from 'ethers'
 import { config, networkName } from '../../../config/env'
@@ -143,7 +144,7 @@ async function fetchIpfsBytes(cid: string, signal: AbortSignal): Promise<Uint8Ar
 const cidOf = (uri: unknown): string | undefined =>
   typeof uri === 'string' && uri.startsWith('ipfs://') ? uri.slice('ipfs://'.length) : undefined
 
-/** Block đầu tiên có timestamp >= mốc (tìm nhị phân); lỗi RPC thì quét từ block deploy cho an toàn. */
+/** Block đầu tiên có timestamp >= mốc (tìm nhị phân); lỗi RPC thì dừng thay vì quét toàn bộ. */
 async function firstBlockAtOrAfter(
   provider: JsonRpcProvider,
   seconds: number,
@@ -163,8 +164,8 @@ async function firstBlockAtOrAfter(
     }
     return lo
   } catch (error) {
-    if (signal.aborted) throw error
-    return floor
+    // Fail explicitly instead of silently triggering a massive block-range scan.
+    throw error
   }
 }
 
@@ -172,6 +173,7 @@ async function readBatchFromChain(
   provider: JsonRpcProvider,
   identity: ProductionTraceIdentity,
   signal: AbortSignal,
+  includeHistory = true,
 ): Promise<PublicReadStatus> {
   const contract = new Contract(identity.contractAddress, abiFile.abi, provider)
   const tokenId = BigInt(identity.tokenId)
@@ -192,30 +194,38 @@ async function readBatchFromChain(
     signal,
   )
 
-  // Mọi sự kiện của lô xảy ra sau thời điểm thu hoạch (hợp đồng chặn harvestDate > block.timestamp),
-  // nên chỉ cần quét từ block đầu tiên có timestamp >= harvestDate thay vì từ lúc deploy.
-  const latest = await withDeadline(provider.getBlockNumber(), signal)
-  const from = await firstBlockAtOrAfter(
-    provider,
-    Number(onChain.harvestDate),
-    config.deployBlock,
-    latest,
-    signal,
-  )
-  const logs = makeLogQuery(contract, from, latest, signal)
-  const [created, accepted, transit, sold, incidents, recalledLogs, transfers] = await withDeadline(
-    Promise.all([
-      logs('BatchCreated', tokenId),
-      logs('TransferAccepted', tokenId),
-      logs('TransitRecorded', tokenId),
-      logs('BatchSold', tokenId),
-      logs('IncidentReported', null, tokenId),
-      logs('BatchRecalled', tokenId),
-      logs('Transfer', null, null, tokenId),
-    ]),
-    signal,
-    45000,
-  )
+  // First paint: never block metadata/IPFS on a potentially huge eth_getLogs backfill.
+  // The optional full history is requested explicitly by the viewer.
+  type ChainLogGroup = (EventLog | Log)[]
+  let logGroups: [ChainLogGroup, ChainLogGroup, ChainLogGroup, ChainLogGroup, ChainLogGroup, ChainLogGroup, ChainLogGroup] = [
+    [], [], [], [], [], [], [],
+  ]
+  if (includeHistory) {
+    // History is potentially expensive on Alchemy Free (small eth_getLogs block ranges).
+    const latest = await withDeadline(provider.getBlockNumber(), signal)
+    const from = await firstBlockAtOrAfter(
+      provider,
+      Number(onChain.harvestDate),
+      config.deployBlock,
+      latest,
+      signal,
+    )
+    const logs = makeLogQuery(contract, from, latest, signal)
+    logGroups = await withDeadline(
+      Promise.all([
+        logs('BatchCreated', tokenId),
+        logs('TransferAccepted', tokenId),
+        logs('TransitRecorded', tokenId),
+        logs('BatchSold', tokenId),
+        logs('IncidentReported', null, tokenId),
+        logs('BatchRecalled', tokenId),
+        logs('Transfer', null, null, tokenId),
+      ]),
+      signal,
+      45000,
+    )
+  }
+  const [created, accepted, transit, sold, incidents, recalledLogs, transfers] = logGroups
 
   const blockTimes = new Map<number, string>()
   const timeOf = async (log: Log): Promise<string> => {
@@ -232,6 +242,12 @@ async function readBatchFromChain(
   const label = async (address: string): Promise<string> => {
     if (address === ZeroAddress) return 'zero-address'
     if (!labels.has(address)) {
+      if (!includeHistory) {
+        const value = shortAddress(address)
+        labels.set(address, value)
+        wallets[value] = address
+        return value
+      }
       let role = ''
       for (const [roleName, display] of ROLE_LABELS) {
         if (await contract.hasRole(keccak256(toUtf8Bytes(roleName)), address)) {
@@ -514,7 +530,7 @@ async function readBatchFromChain(
     recalled: Boolean(onChain.recalled),
     recall,
     owner: await label(owner),
-    farmer: creator ? await label(creator) : 'Chưa có dữ liệu',
+    farmer: creator ? await label(creator) : includeHistory ? 'Chưa có dữ liệu' : 'Chưa tải lịch sử',
     quantityKg: 1000,
     farmLocation: onChain.farmLocation,
     variety: text('cultivar'),
@@ -531,6 +547,7 @@ async function readBatchFromChain(
     readings,
     documents,
     source: 'chain',
+    historyLoaded: includeHistory,
     network: `${networkName} · ${config.chainId}`,
     imageUrl: imageVerified === 'match' && imageCid ? ipfsFileUrl(imageCid) : undefined,
     warnings,
@@ -544,6 +561,7 @@ async function readBatchFromChain(
 export async function inspectPublicChain(
   identity: ProductionTraceIdentity,
   signal: AbortSignal,
+  includeHistory = true,
 ): Promise<PublicReadStatus> {
   const missing: string[] = []
   if (!config.publicRpcUrl || !validRpcUrl(config.publicRpcUrl)) missing.push('VITE_PUBLIC_RPC_URL')
@@ -562,7 +580,7 @@ export async function inspectPublicChain(
     const code = await withDeadline(provider.getCode(identity.contractAddress), signal)
     if (code === '0x') return { kind: 'contractMissing' }
 
-    return await readBatchFromChain(provider, identity, signal)
+    return await readBatchFromChain(provider, identity, signal, includeHistory)
   } catch (error) {
     if (signal.aborted) throw error
     if (error instanceof Error && error.message === 'RPC_TIMEOUT') return { kind: 'rpcTimeout' }

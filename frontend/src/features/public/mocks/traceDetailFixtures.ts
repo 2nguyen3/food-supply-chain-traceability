@@ -94,6 +94,8 @@ export interface DemoBatch {
   documents: DemoDocument[]
   /** 'chain' khi đọc từ blockchain thật; mặc định là dữ liệu mẫu. */
   source?: 'demo' | 'chain'
+  /** False means event/ownership/temperature history has NOT been fetched yet. */
+  historyLoaded?: boolean
   network?: string
   imageUrl?: string
   warnings?: string[]

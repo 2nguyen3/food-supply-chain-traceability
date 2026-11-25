@@ -13,28 +13,40 @@ import { TraceSections, type TraceSection } from './TraceSections'
 import '../styles/trace-detail.css'
 
 /** Chi tiết truy xuất của một lô đọc từ blockchain thật (cùng bố cục với trang demo). */
-export function TraceDetailView({ batch }: { batch: DemoBatch }) {
+export function TraceDetailView({
+  batch,
+  onLoadHistory,
+  historyLoading = false,
+  historyError = '',
+}: {
+  batch: DemoBatch
+  onLoadHistory?: () => void
+  historyLoading?: boolean
+  historyError?: string
+}) {
+  const historyPending = batch.historyLoaded === false
+  const historyMessage = <p role="status">Lịch sử sự kiện chưa được tải từ Blockchain; không thể kết luận lô chưa có hoạt động.</p>
   const expired = batch.expiryDate ? Date.now() >= Date.parse(batch.expiryDate) : false
   const sections: TraceSection[] = [
     {
       id: 'journey',
       label: 'Hành trình lô',
       icon: 'route',
-      content: <TraceJourneyPanel events={batch.events} live />,
+      content: historyPending ? historyMessage : <TraceJourneyPanel events={batch.events} live />,
     },
     {
       id: 'temperature',
       label: 'Nhiệt độ',
       mobileLabel: 'Nhiệt độ vận chuyển',
       icon: 'thermo',
-      content: <TraceTemperaturePanel batch={batch} />,
+      content: historyPending ? historyMessage : <TraceTemperaturePanel batch={batch} />,
     },
     {
       id: 'nft',
       label: 'Lịch sử NFT',
       mobileLabel: 'Lịch sử NFT (ERC-721)',
       icon: 'hash',
-      content: <TraceNFTPanel ownership={batch.ownership} wallets={batch.wallets} />,
+      content: historyPending ? historyMessage : <TraceNFTPanel ownership={batch.ownership} wallets={batch.wallets} />,
     },
     {
       id: 'documents',
@@ -57,6 +69,20 @@ export function TraceDetailView({ batch }: { batch: DemoBatch }) {
           <Link to="/trace">‹ Tra cứu lô khác</Link>
           <strong>Dữ liệu đọc từ blockchain · {batch.network}</strong>
         </div>
+        {historyPending && (
+          <div className="trace-alert trace-alert-expired" role="status">
+            <div>
+              <strong>Đã đọc thông tin lô; lịch sử sự kiện chưa được tải</strong>
+              <p>Thông tin lô và kết quả kiểm tra hồ sơ IPFS được đọc riêng. Lịch sử on-chain không được suy đoán.</p>
+              {onLoadHistory && (
+                <button className="button secondary" type="button" onClick={onLoadHistory} disabled={historyLoading}>
+                  {historyLoading ? 'Đang tải lịch sử…' : 'Tải lịch sử Blockchain'}
+                </button>
+              )}
+              {historyError && <p role="alert">{historyError}</p>}
+            </div>
+          </div>
+        )}
         {batch.warnings?.map((warning) => (
           <div className="trace-alert trace-alert-expired" role="alert" key={warning}>
             <span className="trace-alert-icon">
