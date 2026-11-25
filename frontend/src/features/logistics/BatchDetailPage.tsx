@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useSession } from '../../app/session'
 import { config } from '../../config/env'
+import { LogisticsPrivateDocuments } from './PrivateDocuments'
 import {
   readLogisticsSnapshot,
   recordBatchTransit,
@@ -25,7 +26,7 @@ export default function LogisticsBatchDetailPage() {
   const [batch, setBatch] = useState<LogisticsBatch | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<'temp' | 'docs'>('temp')
+  const [tab, setTab] = useState<'temp' | 'docs' | 'private'>('temp')
 
   // Kiểm tra 3 hash IPFS
   const [verifying, setVerifying] = useState(false)
@@ -387,6 +388,22 @@ export default function LogisticsBatchDetailPage() {
         >
           Hồ sơ công khai & 3 Hash
         </button>
+        <button
+          type="button"
+          onClick={() => setTab('private')}
+          style={{
+            padding: '10px 18px',
+            borderRadius: 12,
+            border: tab === 'private' ? 'none' : '1px solid #D6CEBE',
+            background: tab === 'private' ? '#275641' : '#FFFFFF',
+            color: tab === 'private' ? '#FFFFFF' : '#1E293B',
+            fontSize: 14,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          Hóa đơn riêng (RBAC)
+        </button>
       </div>
 
       {tab === 'temp' ? (
@@ -684,6 +701,8 @@ export default function LogisticsBatchDetailPage() {
             </table>
           </div>
         </div>
+      ) : tab === 'private' ? (
+        <LogisticsPrivateDocuments tokenId={batch.tokenId} />
       ) : (
         /* Tab 3 hash hồ sơ công khai */
         <div
