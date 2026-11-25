@@ -3,6 +3,7 @@ import { config } from '../../../config/env'
 import abiFile from '../../../contracts/FoodTraceability.json'
 import type { Lifecycle } from '../../../domain/types'
 import { argsOf, makeLogQuery } from '../../../services/chainLogs'
+import { mapChainBounded } from '../../../services/chainConcurrency'
 import { roleHash } from '../../../services/roles'
 import { ipfsFileUrl } from '../../public/services/publicChainReader'
 import type { FarmerBatch, FarmerSnapshot, FarmerTransfer, TransferStatus } from '../types'
@@ -83,8 +84,9 @@ export async function readFarmerSnapshot(
     const created = await logs('BatchCreated', null, address)
     const tokenIds = created.map((log) => argsOf(log).tokenId as bigint)
 
-    const batches: FarmerBatch[] = await Promise.all(
-      created.map(async (log) => {
+    const batches: FarmerBatch[] = await mapChainBounded(
+      created,
+      async (log) => {
         const a = argsOf(log)
         const tokenId = a.tokenId as bigint
         const [info, owner, pending, chainExpired] = await Promise.all([
@@ -115,7 +117,8 @@ export async function readFarmerSnapshot(
               }
             : undefined,
         }
-      }),
+      },
+      signal,
     )
     batches.sort((x, y) => Number(x.tokenId) - Number(y.tokenId))
     const codeOf = new Map(batches.map((batch) => [batch.tokenId, batch.code]))

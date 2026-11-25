@@ -4,6 +4,7 @@ import abiFile from '../../../contracts/FoodTraceability.json'
 import type { Lifecycle } from '../../../domain/types'
 import { sha256Hex, toBytes32 } from '../../../lib/hash'
 import { argsOf, makeLogQuery } from '../../../services/chainLogs'
+import { mapChainBounded } from '../../../services/chainConcurrency'
 import { roleHash } from '../../../services/roles'
 import { sendTransaction, type TxProgress } from '../../../services/tx'
 import { ipfsFileUrl } from '../../public/services/publicChainReader'
@@ -188,8 +189,9 @@ export async function readLogisticsSnapshot(
     const allRelevantBatches = new Map<string, LogisticsBatch>()
     const codeOf = new Map<string, string>()
 
-    await Promise.all(
-      createdLogs.map(async (log) => {
+    await mapChainBounded(
+      createdLogs,
+      async (log) => {
         const a = argsOf(log)
         const tokenId = a.tokenId as bigint
         const tokenIdStr = tokenId.toString()
@@ -256,7 +258,8 @@ export async function readLogisticsSnapshot(
         if (ownedByMe) ownedBatches.push(batch)
         if (isIncomingToMe) incomingPending.push(batch)
         if (isOutgoingFromMe) outgoingPending.push(batch)
-      }),
+      },
+      signal,
     )
 
     ownedBatches.sort((a, b) => Number(a.tokenId) - Number(b.tokenId))

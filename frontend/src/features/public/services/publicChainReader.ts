@@ -152,21 +152,16 @@ async function firstBlockAtOrAfter(
   latest: number,
   signal: AbortSignal,
 ): Promise<number> {
-  try {
-    let lo = floor
-    let hi = latest
-    while (lo < hi) {
-      const mid = Math.floor((lo + hi) / 2)
-      const block = await withDeadline(provider.getBlock(mid), signal)
-      if (!block) return floor
-      if (block.timestamp >= seconds) hi = mid
-      else lo = mid + 1
-    }
-    return lo
-  } catch (error) {
-    // Fail explicitly instead of silently triggering a massive block-range scan.
-    throw error
+  let lo = floor
+  let hi = latest
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2)
+    const block = await withDeadline(provider.getBlock(mid), signal)
+    if (!block) return floor
+    if (block.timestamp >= seconds) hi = mid
+    else lo = mid + 1
   }
+  return lo
 }
 
 async function readBatchFromChain(

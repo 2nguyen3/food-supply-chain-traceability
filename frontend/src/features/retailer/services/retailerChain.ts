@@ -3,6 +3,7 @@ import { config } from '../../../config/env'
 import abiFile from '../../../contracts/FoodTraceability.json'
 import type { Lifecycle } from '../../../domain/types'
 import { argsOf, makeLogQuery } from '../../../services/chainLogs'
+import { mapChainBounded } from '../../../services/chainConcurrency'
 import { roleHash } from '../../../services/roles'
 
 const lifecycles: Lifecycle[] = ['Created', 'InTransit', 'Delivered', 'Sold']
@@ -62,7 +63,7 @@ export async function readRetailerSnapshot(address: string, signal?: AbortSignal
     const created = await logs('BatchCreated')
     const allIds = created.map((log) => argsOf(log).tokenId as bigint)
     const codeOf = new Map(created.map((log) => [String(argsOf(log).tokenId), String(argsOf(log).batchCode)]))
-    const allBatches = await Promise.all(allIds.map(async (id) => {
+    const allBatches = await mapChainBounded(allIds, async (id) => {
       const [batch, owner, pending, chainExpired] = await Promise.all([
         contract.getBatch(id), contract.ownerOf(id) as Promise<string>, contract.getPendingTransfer(id),
         contract.isExpired(id),
@@ -74,7 +75,7 @@ export async function readRetailerSnapshot(address: string, signal?: AbortSignal
         expiryDate: new Date(Number(batch.expiryDate) * 1000).toISOString(), owner: getAddress(owner),
         pendingRequestId: pending.active ? String(pending.requestId) : undefined,
       } satisfies RetailerBatch
-    }))
+    }, signal)
     const batches = allBatches.filter((batch) => batch.owner.toLowerCase() === address.toLowerCase())
     const timeCache = new Map<number, string>()
     const timeOf = async (blockNumber: number) => {

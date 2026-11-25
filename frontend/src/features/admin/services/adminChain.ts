@@ -15,6 +15,7 @@ import type { Lifecycle, Role } from '../../../domain/types'
 import { sha256Hex } from '../../../lib/hash'
 import { readResponseBytes } from '../../../lib/readResponseBytes'
 import { argsOf, makeLogQuery } from '../../../services/chainLogs'
+import { mapChainBounded } from '../../../services/chainConcurrency'
 import { roleHash } from '../../../services/roles'
 import { ipfsFileUrl } from '../../public/services/publicChainReader'
 
@@ -370,8 +371,9 @@ async function buildBatchRows(
   recallLogs: (EventLog | Log)[],
 ): Promise<AdminBatchRow[]> {
   const recalls = await recallMap(ctx, recallLogs)
-  const rows = await Promise.all(
-    createdLogs.map(async (log) => {
+  const rows = await mapChainBounded(
+    createdLogs,
+    async (log) => {
       const a = argsOf(log)
       const tokenId = BigInt(String(a.tokenId))
       const [info, owner, chainExpired] = await Promise.all([
@@ -402,7 +404,7 @@ async function buildBatchRows(
         recall: recalls.get(tokenId.toString()) ?? null,
       }
       return row
-    }),
+    },
   )
   rows.sort((x, y) => Number(x.tokenId) - Number(y.tokenId))
   return rows
@@ -414,8 +416,9 @@ async function buildIncidentRows(
   batches: AdminBatchRow[],
 ): Promise<AdminIncidentRow[]> {
   const byToken = new Map(batches.map((batch) => [batch.tokenId, batch]))
-  const rows = await Promise.all(
-    incidentLogs.map(async (log) => {
+  const rows = await mapChainBounded(
+    incidentLogs,
+    async (log) => {
       const a = argsOf(log)
       const incidentId = Number(a.incidentId)
       const tokenId = String(a.tokenId)
@@ -452,7 +455,7 @@ async function buildIncidentRows(
         recall: batch?.recall ?? null,
       }
       return row
-    }),
+    },
   )
   rows.sort((x, y) => x.incidentId - y.incidentId)
   return rows
@@ -1141,8 +1144,9 @@ export async function readAdminRoles(
       if (isAddress(account)) addresses.add(asAddress(account))
     }
 
-    const holders = await Promise.all(
-      [...addresses].map(async (address) => {
+    const holders = await mapChainBounded(
+      [...addresses],
+      async (address) => {
         const active = await Promise.all(
           ROLES.map(
             (role) => ctx.call(ctx.contract.hasRole(roleHash(role), address)) as Promise<boolean>,
@@ -1157,7 +1161,7 @@ export async function readAdminRoles(
           roles,
           farmId: farmId || null,
         } satisfies AdminRoleHolder
-      }),
+      },
     )
 
     const changes: AdminRoleChange[] = []
@@ -1222,8 +1226,9 @@ export async function readAdminFarms(
         batchCount.set(asAddress(farmer), (batchCount.get(asAddress(farmer)) ?? 0) + 1)
     }
 
-    const farms = await Promise.all(
-      [...addresses].map(async (address) => {
+    const farms = await mapChainBounded(
+      [...addresses],
+      async (address) => {
         const [farmId, activeFarmer] = await Promise.all([
           ctx.call(ctx.contract.farmIdOf(address)) as Promise<string>,
           ctx.call(ctx.contract.hasRole(farmerHash, address)) as Promise<boolean>,
@@ -1237,7 +1242,7 @@ export async function readAdminFarms(
           assignedAt: assignment?.at ?? null,
           assignTx: assignment?.txHash ?? null,
         } satisfies AdminFarmRow
-      }),
+      },
     )
     farms.sort(
       (x, y) =>
