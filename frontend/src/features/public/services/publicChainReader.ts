@@ -123,7 +123,7 @@ export function ipfsFileUrl(cid: string): string {
   return `${gatewayBases()[0]}/ipfs/${cid}`
 }
 
-async function fetchIpfsBytes(cid: string, signal: AbortSignal): Promise<Uint8Array | null> {
+export async function fetchIpfsBytes(cid: string, signal: AbortSignal): Promise<Uint8Array | null> {
   if (!/^[A-Za-z0-9]{10,200}$/.test(cid)) return null
   for (const base of gatewayBases()) {
     if (signal.aborted) throw new DOMException('Đã hủy', 'AbortError')

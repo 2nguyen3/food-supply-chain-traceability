@@ -7,7 +7,7 @@ import { argsOf, makeLogQuery } from '../../../services/chainLogs'
 import { mapChainBounded } from '../../../services/chainConcurrency'
 import { roleHash } from '../../../services/roles'
 import { sendTransaction, type TxProgress } from '../../../services/tx'
-import { ipfsFileUrl } from '../../public/services/publicChainReader'
+import { fetchIpfsBytes } from '../../public/services/publicChainReader'
 
 const LIFECYCLES: Lifecycle[] = ['Created', 'InTransit', 'Delivered', 'Sold']
 
@@ -348,22 +348,23 @@ export async function verifyBatchIpfsFiles(batch: LogisticsBatch): Promise<{
   let metadataJson: Record<string, unknown> | undefined
   let certCid = ''
   let imageCid = ''
+  let actualMeta: `0x${string}` | null = null
 
+  // Dung cung co che gateway fallback (gateway cau hinh -> Pinata public -> ipfs.io)
+  // voi Public Trace. Khong chap nhan metadata neu SHA-256 chua khop Blockchain.
   try {
-    const metaResp = await fetch(ipfsFileUrl(batch.metadataCid), { signal: AbortSignal.timeout(12000) })
-    if (!metaResp.ok) throw new Error(`HTTP ${metaResp.status}`)
-    const metaBuf = await metaResp.arrayBuffer()
-    const actualMeta = toBytes32(await sha256Hex(metaBuf))
-    const matchedMeta = actualMeta.toLowerCase() === batch.metadataHash.toLowerCase()
-    results.push({
-      key: 'metadata',
-      label: 'metadata.json',
-      cid: batch.metadataCid,
-      expectedHash: batch.metadataHash,
-      actualHash: actualMeta,
-      matched: matchedMeta,
-    })
-    metadataJson = JSON.parse(new TextDecoder().decode(metaBuf)) as Record<string, unknown>
+    const bytes = await fetchIpfsBytes(batch.metadataCid, AbortSignal.timeout(60000))
+    if (!bytes) throw new Error('Khong tai duoc metadata.json tu cac IPFS gateway.')
+    actualMeta = toBytes32(await sha256Hex(bytes))
+    if (actualMeta.toLowerCase() !== batch.metadataHash.toLowerCase()) {
+      throw new Error('SHA-256 metadata.json KHONG khop voi Blockchain.')
+    }
+
+    const parsed: unknown = JSON.parse(new TextDecoder().decode(bytes))
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('Noi dung metadata.json khong phai JSON object hop le.')
+    }
+    metadataJson = parsed as Record<string, unknown>
     const rawCert =
       (metadataJson.certificateURI as string | undefined) ??
       (metadataJson.certificate as string | undefined) ??
@@ -373,17 +374,29 @@ export async function verifyBatchIpfsFiles(batch: LogisticsBatch): Promise<{
       (metadataJson.image as string | undefined) ??
       (metadataJson.image_cid as string | undefined) ??
       ''
+    if (typeof rawCert !== 'string' || typeof rawImg !== 'string') {
+      throw new Error('Truong CID trong metadata.json khong dung dinh dang.')
+    }
     certCid = rawCert.replace(/^ipfs:\/\//i, '')
     imageCid = rawImg.replace(/^ipfs:\/\//i, '')
-  } catch (err) {
     results.push({
       key: 'metadata',
       label: 'metadata.json',
       cid: batch.metadataCid,
       expectedHash: batch.metadataHash,
-      actualHash: null,
+      actualHash: actualMeta,
+      matched: true,
+    })
+  } catch (err) {
+    metadataJson = undefined
+    results.push({
+      key: 'metadata',
+      label: 'metadata.json',
+      cid: batch.metadataCid,
+      expectedHash: batch.metadataHash,
+      actualHash: actualMeta,
       matched: false,
-      error: err instanceof Error ? err.message : 'Không tải được metadata.json',
+      error: err instanceof Error ? err.message : 'Khong xac minh duoc metadata.json',
     })
   }
 
@@ -393,23 +406,24 @@ export async function verifyBatchIpfsFiles(batch: LogisticsBatch): Promise<{
     cid: string,
     expectedHash: `0x${string}`,
   ) => {
-    if (!cid) {
+    if (!metadataJson || !cid) {
       results.push({
         key,
         label,
-        cid: '',
+        cid,
         expectedHash,
         actualHash: null,
         matched: false,
-        error: `Thiếu CID của ${label} trong metadata.json`,
+        error: !metadataJson
+          ? 'Chua the xac minh: metadata.json chua duoc tai va kiem hash thanh cong.'
+          : `Thieu CID cua ${label} trong metadata.json`,
       })
       return
     }
     try {
-      const resp = await fetch(ipfsFileUrl(cid), { signal: AbortSignal.timeout(12000) })
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-      const buf = await resp.arrayBuffer()
-      const actual = toBytes32(await sha256Hex(buf))
+      const bytes = await fetchIpfsBytes(cid, AbortSignal.timeout(60000))
+      if (!bytes) throw new Error(`Khong tai duoc ${label} tu cac IPFS gateway.`)
+      const actual = toBytes32(await sha256Hex(bytes))
       results.push({
         key,
         label,
@@ -417,6 +431,11 @@ export async function verifyBatchIpfsFiles(batch: LogisticsBatch): Promise<{
         expectedHash,
         actualHash: actual,
         matched: actual.toLowerCase() === expectedHash.toLowerCase(),
+        ...(
+          actual.toLowerCase() !== expectedHash.toLowerCase()
+            ? { error: `SHA-256 ${label} KHONG khop voi Blockchain.` }
+            : {}
+        ),
       })
     } catch (err) {
       results.push({
@@ -426,13 +445,13 @@ export async function verifyBatchIpfsFiles(batch: LogisticsBatch): Promise<{
         expectedHash,
         actualHash: null,
         matched: false,
-        error: err instanceof Error ? err.message : `Không tải được ${label}`,
+        error: err instanceof Error ? err.message : `Khong tai duoc ${label}`,
       })
     }
   }
 
   await checkSingle('certificate', 'certificate.pdf', certCid, batch.certificateHash)
-  await checkSingle('image', 'Ảnh gốc của lô', imageCid, batch.imageHash)
+  await checkSingle('image', 'Anh goc cua lo', imageCid, batch.imageHash)
 
   return {
     allMatched: results.length === 3 && results.every((r) => r.matched),
