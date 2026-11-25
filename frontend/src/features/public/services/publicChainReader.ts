@@ -473,7 +473,8 @@ async function readBatchFromChain(
   const metadataCid = tokenUri.startsWith('ipfs://') ? tokenUri.slice('ipfs://'.length) : tokenUri
   let meta: Record<string, unknown> | null = null
   let metaVerified: DemoDocument['verified'] = 'unavailable'
-  const metaBytes = await fetchIpfsBytes(metadataCid, signal)
+  const metaAsset = await fetchIpfsAsset(metadataCid, signal)
+  const metaBytes = metaAsset?.bytes
   if (metaBytes) {
     metaVerified =
       (await sha256Hex(metaBytes)) === chainHash(onChain.metadataHash) ? 'match' : 'mismatch'
@@ -494,20 +495,23 @@ async function readBatchFromChain(
   const certificateCid = cidOf(meta?.certificateURI)
   const imageCid = cidOf(meta?.image)
   let imageName = 'Ảnh gốc'
+  // Bind each original document to the gateway that supplied its verified bytes.
+  // A private gateway may return HTTP 403 even when a public gateway works.
   const verifyFile = async (
     cid: string | undefined,
     expected: string,
-  ): Promise<DemoDocument['verified']> => {
-    if (!cid) return 'unavailable'
-    const bytes = await fetchIpfsBytes(cid, signal)
-    if (!bytes) return 'unavailable'
+  ): Promise<{ verified: DemoDocument['verified']; url?: string }> => {
+    if (!cid) return { verified: 'unavailable' }
+    const asset = await fetchIpfsAsset(cid, signal)
+    if (!asset) return { verified: 'unavailable' }
     if (cid === imageCid) {
-      const format = imageFormat(bytes)
+      const format = imageFormat(asset.bytes)
       if (format) imageName = `batch.${format === 'jpeg' ? 'jpg' : format}`
     }
-    return (await sha256Hex(bytes)) === chainHash(expected) ? 'match' : 'mismatch'
+    const verified = (await sha256Hex(asset.bytes)) === chainHash(expected) ? 'match' : 'mismatch'
+    return { verified, url: verified === 'match' ? asset.url : undefined }
   }
-  const [certVerified, imageVerified] = await Promise.all([
+  const [certResult, imageResult] = await Promise.all([
     verifyFile(certificateCid, onChain.certificateHash),
     verifyFile(imageCid, onChain.imageHash),
   ])
@@ -518,8 +522,8 @@ async function readBatchFromChain(
       label: 'Chứng chỉ PDF gốc',
       cid: certificateCid,
       sha256: chainHash(onChain.certificateHash),
-      verified: certVerified,
-      fileUrl: certificateCid ? ipfsFileUrl(certificateCid) : undefined,
+      verified: certResult.verified,
+      fileUrl: certResult.url,
     },
     {
       name: imageName,
@@ -527,8 +531,8 @@ async function readBatchFromChain(
       label: 'Ảnh gốc của lô',
       cid: imageCid,
       sha256: chainHash(onChain.imageHash),
-      verified: imageVerified,
-      fileUrl: imageCid ? ipfsFileUrl(imageCid) : undefined,
+      verified: imageResult.verified,
+      fileUrl: imageResult.url,
     },
     {
       name: 'metadata.json',
@@ -537,7 +541,7 @@ async function readBatchFromChain(
       cid: metadataCid,
       sha256: chainHash(onChain.metadataHash),
       verified: metaVerified,
-      fileUrl: ipfsFileUrl(metadataCid),
+      fileUrl: metaVerified === 'match' ? metaAsset?.url : undefined,
     },
   ]
   for (const d of documents) {
@@ -580,7 +584,7 @@ async function readBatchFromChain(
     source: 'chain',
     historyLoaded: includeHistory,
     network: `${networkName} · ${config.chainId}`,
-    imageUrl: imageVerified === 'match' && imageCid ? ipfsFileUrl(imageCid) : undefined,
+    imageUrl: imageResult.verified === 'match' ? imageResult.url : undefined,
     warnings,
     wallets,
     ownerAddress: owner,

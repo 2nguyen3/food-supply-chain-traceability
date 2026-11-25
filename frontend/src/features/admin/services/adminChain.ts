@@ -16,6 +16,7 @@ import { sha256Hex } from '../../../lib/hash'
 import { argsOf, makeLogQuery } from '../../../services/chainLogs'
 import { mapChainBounded } from '../../../services/chainConcurrency'
 import { roleHash } from '../../../services/roles'
+import { classifyRelatedBatches } from './relatedBatchClassifier'
 import { fetchIpfsAsset, ipfsFileUrl } from '../../public/services/publicChainReader'
 
 const LIFECYCLES: Lifecycle[] = ['Created', 'InTransit', 'Delivered', 'Sold']
@@ -1064,21 +1065,7 @@ export async function readAdminIncidentDetail(
       }
     }
 
-    const related = batches.filter(
-      (entry) =>
-        entry.tokenId !== batch.tokenId &&
-        entry.farmId === batch.farmId &&
-        entry.harvestGroupId === batch.harvestGroupId,
-    )
-    const sameFarmOtherGroup = batches.filter(
-      (entry) =>
-        entry.tokenId !== batch.tokenId &&
-        entry.farmId === batch.farmId &&
-        entry.harvestGroupId !== batch.harvestGroupId,
-    )
-    const otherFarm = batches.filter(
-      (entry) => entry.tokenId !== batch.tokenId && entry.farmId !== batch.farmId,
-    )
+    const { related, sameFarmOtherGroup, otherFarm } = classifyRelatedBatches(batch, batches)
 
     const chainDurationMs = Math.round(performance.now() - started)
     const artifactStarted = performance.now()
