@@ -123,22 +123,33 @@ export function ipfsFileUrl(cid: string): string {
   return `${gatewayBases()[0]}/ipfs/${cid}`
 }
 
-export async function fetchIpfsBytes(cid: string, signal: AbortSignal): Promise<Uint8Array | null> {
+/** Shared IPFS fallback; also return the actual working gateway for evidence links. */
+export async function fetchIpfsAsset(
+  cid: string,
+  signal: AbortSignal,
+): Promise<{ bytes: Uint8Array; url: string } | null> {
   if (!/^[A-Za-z0-9]{10,200}$/.test(cid)) return null
   for (const base of gatewayBases()) {
     if (signal.aborted) throw new DOMException('Đã hủy', 'AbortError')
     try {
+      const url = `${base}/ipfs/${cid}`
       const timeout = AbortSignal.timeout(15000)
-      const response = await fetch(`${base}/ipfs/${cid}`, {
+      const response = await fetch(url, {
         signal: AbortSignal.any([signal, timeout]),
       })
       if (!response.ok) continue
-      return await readResponseBytes(response, MAX_FILE_BYTES)
+      const bytes = await readResponseBytes(response, MAX_FILE_BYTES)
+      if (bytes.length === 0) continue
+      return { bytes, url }
     } catch (error) {
       if (signal.aborted) throw error
     }
   }
   return null
+}
+
+export async function fetchIpfsBytes(cid: string, signal: AbortSignal): Promise<Uint8Array | null> {
+  return (await fetchIpfsAsset(cid, signal))?.bytes ?? null
 }
 
 const cidOf = (uri: unknown): string | undefined =>

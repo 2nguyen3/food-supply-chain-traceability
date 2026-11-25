@@ -13,17 +13,14 @@ import { config } from '../../../config/env'
 import abiFile from '../../../contracts/FoodTraceability.json'
 import type { Lifecycle, Role } from '../../../domain/types'
 import { sha256Hex } from '../../../lib/hash'
-import { readResponseBytes } from '../../../lib/readResponseBytes'
 import { argsOf, makeLogQuery } from '../../../services/chainLogs'
 import { mapChainBounded } from '../../../services/chainConcurrency'
 import { roleHash } from '../../../services/roles'
-import { ipfsFileUrl } from '../../public/services/publicChainReader'
+import { fetchIpfsAsset, ipfsFileUrl } from '../../public/services/publicChainReader'
 
 const LIFECYCLES: Lifecycle[] = ['Created', 'InTransit', 'Delivered', 'Sold']
 const ROLES: Role[] = ['admin', 'farmer', 'logistics', 'retailer']
 const ROLE_BY_HASH = new Map(ROLES.map((role) => [roleHash(role).toLowerCase(), role]))
-const MAX_ARTIFACT_BYTES = 11 * 1024 * 1024
-const ARTIFACT_TIMEOUT_MS = 15000
 const FEED_SIZE = 12
 
 /** Khóa JSON có thể chứa mô tả sự cố; chỉ đọc khi báo cáo thật sự là JSON. */
@@ -865,12 +862,11 @@ async function readArtifact(
   }
   if (!cid) return empty
   try {
-    const response = await fetch(empty.fileUrl, {
-      signal: AbortSignal.any([signal, AbortSignal.timeout(ARTIFACT_TIMEOUT_MS)]),
-    })
-    if (!response.ok) return empty
-    const bytes = await readResponseBytes(response, MAX_ARTIFACT_BYTES)
-    if (bytes.length === 0) return empty
+    // One gateway may return HTTP 403. Retry using the same gateways as Public Trace.
+    // Never label an artifact verified unless its downloaded SHA-256 matches on-chain.
+    const asset = await fetchIpfsAsset(cid, signal)
+    if (!asset) return empty
+    const { bytes, url } = asset
     const computedSha256 = await sha256Hex(bytes)
     const isPdf =
       bytes.length >= 4 &&
@@ -890,6 +886,7 @@ async function readArtifact(
     }
     return {
       ...empty,
+      fileUrl: url,
       computedSha256,
       verified: computedSha256 === expected ? 'match' : 'mismatch',
       kind: isPdf ? 'pdf' : json ? 'json' : 'other',
