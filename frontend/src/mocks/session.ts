@@ -1,7 +1,10 @@
+import { config } from '../config/env'
 import type { Role, Wallet } from '../domain/types'
 export interface Session {
   wallet: Wallet
   source: 'chain' | 'development-preview'
+  /** Thời điểm phiên đăng nhập hết hạn (ms); chỉ có với phiên đăng nhập bằng ví thật. */
+  expiresAt?: number
 }
 let preview: Session | null = null
 export function getPreviewSession(): Session | null {
@@ -14,7 +17,7 @@ export function setPreviewRole(role: Role | null): void {
         source: 'development-preview',
         wallet: {
           address: '0x0000000000000000000000000000000000000000',
-          chainId: 11155111,
+          chainId: config.chainId,
           roles: [role],
         },
       }

@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: cocomark-api
+    runtime: docker
+    plan: free
+    branch: nguyen
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeployTrigger: off
+    envVars:
+      - key: CHAIN_ID
+        value: "11155111"
+      - key: TOKEN_TTL_MINUTES
+        value: "20"
+      - key: DATABASE_URL
+        sync: false
+      - key: RPC_URL
+        sync: false
+      - key: CONTRACT_ADDRESS
+        sync: false
+      - key: DEPLOY_BLOCK
+        sync: false
+      - key: MASTER_KEY
+        sync: false
+      - key: PINATA_JWT
+        sync: false
+      - key: IPFS_GATEWAY
+        sync: false
+      - key: ALLOWED_ORIGIN
+        sync: false
+      - key: AUTH_DOMAIN
+        sync: false

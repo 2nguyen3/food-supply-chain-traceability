@@ -1,0 +1,132 @@
+.network-card {
+  padding: 44px 48px 40px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--white);
+  box-shadow: 0 10px 30px rgba(70, 55, 33, 0.06);
+  text-align: center;
+}
+
+.network-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: #fbe9e7;
+  color: #c0453b;
+}
+
+.network-title {
+  margin: 0 0 14px;
+  font-size: clamp(1.65rem, 4vw, 2rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.network-description {
+  max-width: 620px;
+  margin: 0 auto 26px;
+  color: var(--cocoa);
+  font-size: 17px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.network-description strong {
+  font-weight: 700;
+}
+
+.network-failure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 26px;
+  padding: 40px 24px 34px;
+  border: 1px solid #f0c9c5;
+  border-radius: 14px;
+  background: #fdeceb;
+  color: #8f2a21;
+}
+
+.network-failure-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  background: var(--white);
+  color: #c0453b;
+}
+
+.network-failure-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.network-failure strong {
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.network-failure p {
+  margin: 0;
+  color: #8a5a55;
+  font-size: 16px;
+}
+
+.network-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.network-primary,
+.network-secondary {
+  min-height: 52px;
+  padding: 0 26px;
+  border-radius: 12px;
+  font-size: 17px;
+}
+
+.network-primary {
+  min-width: 300px;
+}
+
+.network-primary-compact {
+  min-width: 158px;
+}
+
+.network-secondary {
+  min-width: 196px;
+}
+
+@media (max-width: 680px) {
+  .network-card {
+    padding: 28px 20px;
+  }
+
+  .network-description {
+    font-size: 15px;
+  }
+
+  .network-failure {
+    padding: 28px 18px 24px;
+  }
+
+  .network-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .network-primary,
+  .network-secondary {
+    width: 100%;
+    min-width: 0;
+  }
+}

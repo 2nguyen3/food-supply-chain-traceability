@@ -1,0 +1,247 @@
+.trace-blockchain-page {
+  min-height: 640px;
+  background: var(--ivory);
+  padding: 28px 0 80px;
+}
+
+.trace-blockchain-container {
+  max-width: 950px;
+}
+
+.trace-blockchain-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--forest-dark);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.trace-blockchain-heading {
+  margin: 26px 0 26px;
+}
+
+.trace-blockchain-eyebrow {
+  color: var(--forest-dark);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.trace-blockchain-heading h1 {
+  margin: 7px 0 8px;
+  font-size: clamp(29px, 4vw, 42px);
+  line-height: 1.2;
+}
+
+.trace-blockchain-heading p {
+  max-width: 650px;
+  margin: 0;
+  color: var(--cocoa-soft);
+  font-size: 14px;
+}
+
+.trace-blockchain-identity {
+  display: grid;
+  grid-template-columns: 235px minmax(0, 1fr);
+  gap: 24px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.trace-blockchain-network {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 26px;
+  background: var(--cocoa);
+  color: var(--ivory);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.trace-blockchain-network-dot {
+  width: 11px;
+  height: 11px;
+  margin-bottom: 12px;
+  border: 2px solid var(--harvest);
+  border-radius: 50%;
+}
+
+.trace-blockchain-network small {
+  margin-top: 6px;
+  color: #eee9de;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.trace-blockchain-identity dl {
+  display: grid;
+  gap: 13px;
+  align-content: center;
+  min-width: 0;
+  margin: 0;
+  padding: 22px 24px 22px 0;
+}
+
+.trace-blockchain-identity dt {
+  color: var(--cocoa-soft);
+  font-size: 11px;
+}
+
+.trace-blockchain-identity dd {
+  margin: 3px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.trace-blockchain-page .mono {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  overflow-wrap: anywhere;
+}
+
+.trace-blockchain-state {
+  margin-top: 20px;
+  padding: 32px;
+  border-left: 4px solid var(--harvest);
+}
+
+.trace-blockchain-state-error {
+  border-left-color: var(--danger);
+}
+
+.trace-blockchain-state-mark {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin-bottom: 14px;
+  border-radius: 10px;
+  background: var(--sage);
+  color: var(--forest-dark);
+  font-size: 19px;
+  font-weight: 800;
+}
+
+.trace-blockchain-state-error .trace-blockchain-state-mark {
+  background: #fff0ed;
+  color: var(--danger);
+}
+
+.trace-blockchain-state h2 {
+  margin: 0 0 7px;
+  font-size: clamp(19px, 2.8vw, 24px);
+  line-height: 1.35;
+}
+
+.trace-blockchain-state p {
+  max-width: 740px;
+  margin: 0;
+  color: var(--cocoa-soft);
+  font-size: 14px;
+}
+
+.trace-blockchain-state .trace-blockchain-missing {
+  margin-top: 15px;
+  border-radius: var(--radius);
+  background: var(--cream);
+  padding: 10px 12px;
+  color: var(--cocoa);
+  font-size: 12px;
+}
+
+.trace-blockchain-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin-top: 24px;
+}
+
+.trace-blockchain-demo-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--forest-dark);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.trace-blockchain-skeleton {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.trace-blockchain-skeleton span {
+  height: 16px;
+  border-radius: 6px;
+  background: var(--sage);
+}
+
+.trace-blockchain-skeleton span:first-child {
+  width: min(48%, 280px);
+  height: 24px;
+}
+.trace-blockchain-skeleton span:nth-child(2) {
+  width: min(80%, 620px);
+}
+.trace-blockchain-skeleton span:nth-child(3) {
+  width: min(60%, 440px);
+}
+.trace-blockchain-state .state {
+  min-height: 44px;
+  justify-content: flex-start;
+  padding: 0;
+  border: 0;
+}
+
+.trace-blockchain-footnote {
+  max-width: 820px;
+  margin: 20px 0 0;
+  color: var(--cocoa-soft);
+  font-size: 12px;
+}
+
+@media (max-width: 700px) {
+  .trace-blockchain-page {
+    padding: 18px 0 52px;
+  }
+  .trace-blockchain-heading {
+    margin: 17px 0 22px;
+  }
+  .trace-blockchain-identity {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .trace-blockchain-network {
+    min-height: 92px;
+    padding: 18px 20px;
+  }
+  .trace-blockchain-network-dot {
+    margin-bottom: 6px;
+  }
+  .trace-blockchain-identity dl {
+    padding: 20px;
+  }
+  .trace-blockchain-state {
+    padding: 22px 20px;
+  }
+  .trace-blockchain-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .trace-blockchain-actions .button {
+    width: 100%;
+  }
+  .trace-blockchain-demo-link {
+    justify-content: center;
+    text-align: center;
+  }
+}

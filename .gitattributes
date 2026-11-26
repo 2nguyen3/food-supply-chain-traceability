@@ -1,0 +1,2 @@
+# Script shell chạy trong container Linux phải luôn dùng LF; CRLF làm hỏng shebang.
+*.sh text eol=lf

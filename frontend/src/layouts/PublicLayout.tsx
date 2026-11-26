@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Logo } from '../components/common'
 import { useSession } from '../app/session'
+import { config, networkName } from '../config/env'
 export function PublicLayout() {
   const [menu, setMenu] = useState(false)
   const location = useLocation()
+  // On /connect the main card already has the "Kết nối MetaMask" action.
+  const isConnectPage = /^\/connect\/?$/.test(location.pathname)
   const { session } = useSession()
   useEffect(() => setMenu(false), [location.pathname])
-  const dashboard = session?.wallet.roles[0]
+  const dashboard = session?.wallet.chainId === config.chainId ? session.wallet.roles[0] : undefined
   return (
     <div className="public-shell">
       <a className="skip-link" href="#main">
@@ -15,7 +18,7 @@ export function PublicLayout() {
       </a>
       <header className="public-header">
         <div className="container header-inner">
-          <Logo />
+          <Logo scrollTop />
           <nav className="public-nav" aria-label="Điều hướng chính">
             <NavLink
               className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
@@ -31,11 +34,13 @@ export function PublicLayout() {
               Tra cứu lô
             </NavLink>
           </nav>
-          <div className="header-actions">
-            <Link className="button" to={dashboard ? `/${dashboard}/overview` : '/connect'}>
-              {dashboard ? 'Vào bảng điều khiển' : 'Kết nối ví'}
-            </Link>
-          </div>
+          {!isConnectPage && (
+            <div className="header-actions">
+              <Link className="button" to={dashboard ? `/${dashboard}/overview` : '/connect'}>
+                {dashboard ? 'Vào bảng điều khiển' : 'Kết nối ví'}
+              </Link>
+            </div>
+          )}
           <button
             className="button secondary menu-toggle"
             aria-label={menu ? 'Đóng menu' : 'Mở menu'}
@@ -53,9 +58,11 @@ export function PublicLayout() {
             <Link className="nav-link" to="/trace">
               Tra cứu lô
             </Link>
-            <Link className="nav-link" to={dashboard ? `/${dashboard}/overview` : '/connect'}>
-              {dashboard ? 'Vào bảng điều khiển' : 'Kết nối ví'}
-            </Link>
+            {!isConnectPage && (
+              <Link className="nav-link" to={dashboard ? `/${dashboard}/overview` : '/connect'}>
+                {dashboard ? 'Vào bảng điều khiển' : 'Kết nối ví'}
+              </Link>
+            )}
           </nav>
         )}
       </header>
@@ -78,7 +85,7 @@ export function PublicLayout() {
             <div>
               <strong>Công nghệ</strong>
               <p>
-                Ethereum Sepolia
+                {networkName}
                 <br />
                 NFT ERC-721
                 <br />

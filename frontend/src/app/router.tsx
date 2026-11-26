@@ -1,9 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
+import { useLayoutEffect } from 'react'
 import { createBrowserRouter, Navigate, Outlet, useLocation } from 'react-router-dom'
 import { PublicLayout } from '../layouts/PublicLayout'
-import { DashboardLayout, DevelopmentPreview } from '../layouts/DashboardLayout'
+import { DashboardLayout } from '../layouts/DashboardLayout'
 import { SessionProvider, useSession } from './session'
-import { ErrorState } from '../components/ui'
+import { ErrorState, LoadingState } from '../components/ui'
+import { ToastProvider } from '../components/ui/toast'
 import { publicRoutes } from '../features/public/routes'
 import { authRoutes } from '../features/auth/routes'
 import { adminRoutes } from '../features/admin/routes'
@@ -11,29 +13,44 @@ import { farmerRoutes } from '../features/farmer/routes'
 import { logisticsRoutes } from '../features/logistics/routes'
 import { retailerRoutes } from '../features/retailer/routes'
 import type { Role } from '../domain/types'
-import { validateProductionConfig } from '../config/env'
+import { config, validateProductionConfig } from '../config/env'
+function ScrollToTop() {
+  const { pathname, hash } = useLocation()
+  useLayoutEffect(() => {
+    if (!hash) window.scrollTo(0, 0)
+  }, [pathname, hash])
+  return null
+}
 function Root() {
   const missing = import.meta.env.PROD ? validateProductionConfig() : []
   return (
-    <SessionProvider>
-      {missing.length > 0 && (
-        <div
-          role="alert"
-          style={{ padding: '8px 16px', background: 'var(--cream)', color: 'var(--cocoa)' }}
-        >
-          Thiếu cấu hình triển khai: {missing.join(', ')}
-        </div>
-      )}
-      <Outlet />
-      <DevelopmentPreview />
-    </SessionProvider>
+    <ToastProvider>
+      <SessionProvider>
+        {missing.length > 0 && (
+          <div
+            role="alert"
+            style={{ padding: '8px 16px', background: 'var(--cream)', color: 'var(--cocoa)' }}
+          >
+            Thiếu cấu hình triển khai: {missing.join(', ')}
+          </div>
+        )}
+        <ScrollToTop />
+        <Outlet />
+      </SessionProvider>
+    </ToastProvider>
   )
 }
 function Guard({ role }: { role: Role }) {
-  const { session } = useSession()
+  const { session, restoring } = useSession()
   const location = useLocation()
+  if (restoring)
+    return (
+      <div className="container home-note">
+        <LoadingState label="Đang khôi phục phiên đăng nhập…" />
+      </div>
+    )
   if (!session) return <Navigate to="/connect" state={{ from: location.pathname }} replace />
-  if (session.wallet.chainId !== 11155111) return <Navigate to="/auth/network" replace />
+  if (session.wallet.chainId !== config.chainId) return <Navigate to="/auth/network" replace />
   if (!session.wallet.roles.includes(role))
     return (
       <div className="container home-note">
