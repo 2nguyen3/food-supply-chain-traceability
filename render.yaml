@@ -3,7 +3,7 @@ services:
     name: cocomark-api
     runtime: docker
     plan: free
-    branch: nguyen
+    branch: main
     rootDir: backend
     dockerfilePath: ./Dockerfile
     healthCheckPath: /health
